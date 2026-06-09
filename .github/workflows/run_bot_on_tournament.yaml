@@ -96,7 +96,7 @@ jobs:
           # OpenRouter calls flow through OPENROUTER_API_KEY only — bypassing
           # the Metaculus-donated OAI_ANTH_OPENROUTER_KEY wrapper. Off because
           # the donated-key Google route has been flaky.
-          GEMINI_USE_DONATED_OPENROUTER_KEY: 'false'
+          GEMINI_USE_DONATED_OPENROUTER_KEY: 'true'
           # Second-pass gap-fill: analyzer identifies gaps in first-pass research,
           # parallel grounded Gemini searches resolve each. Fails soft.
           GAP_FILL_ENABLED: 'true'
