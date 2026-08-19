@@ -106,8 +106,7 @@ class MetaculusClient:
             # Diagnostic: surface what the listing actually returned so a zero
             # result is debuggable from the job log (we can't reach the API offline).
             logger.warning(
-                "No MiniBench tournament matched in %d scanned project(s); sample slugs: %s. "
-                "Falling back to slug %r.",
+                "No MiniBench tournament matched in %d scanned project(s); sample slugs: %s. Falling back to slug %r.",
                 scanned,
                 sample,
                 _CURRENT_MINIBENCH_SLUG,

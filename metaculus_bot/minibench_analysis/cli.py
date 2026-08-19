@@ -187,9 +187,7 @@ def run_explicit_tournaments(client: MetaculusClient, output_dir: str, ids: list
     return _write_history(client, output_dir, tournaments, note="", scope="explicit list")
 
 
-def _write_history(
-    client: MetaculusClient, output_dir: str, tournaments: list[dict], *, note: str, scope: str
-) -> str:
+def _write_history(client: MetaculusClient, output_dir: str, tournaments: list[dict], *, note: str, scope: str) -> str:
     answered_rows: list[dict] = []
     accuracy_rows: list[dict] = []
     question_rows: list[dict] = []

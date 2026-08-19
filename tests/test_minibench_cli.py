@@ -179,9 +179,9 @@ def test_explicit_tournaments_analyzes_given_ids(tmp_path, monkeypatch):
     fake = _FakeClient()
     fetched = []
     seen_posts = []
-    fake.get_tournament = lambda t: (fetched.append(t) or {"id": t, "slug": f"mb-{t}", "name": f"MB {t}"})
+    fake.get_tournament = lambda t: fetched.append(t) or {"id": t, "slug": f"mb-{t}", "name": f"MB {t}"}
     orig_posts = fake.get_resolved_posts
-    fake.get_resolved_posts = lambda tid: (seen_posts.append(tid) or orig_posts(tid))
+    fake.get_resolved_posts = lambda tid: seen_posts.append(tid) or orig_posts(tid)
     monkeypatch.setattr(cli, "MetaculusClient", lambda *a, **k: fake)
 
     rc = cli.main(["--mode", "all-except-current", "--output-dir", str(tmp_path), "--tournaments", " 501 , 502 "])
