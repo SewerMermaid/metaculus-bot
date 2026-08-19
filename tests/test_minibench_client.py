@@ -48,21 +48,19 @@ def _client(_get):
     return c
 
 
-def test_list_tournaments_matches_minibench_in_paginated_results():
+def test_list_tournaments_uses_dedicated_minibench_endpoint_and_sorts_oldest_first():
     calls = []
 
     def fake_get(path, params=None):
-        calls.append(path)
-        return {
-            "results": [
-                {"id": 1, "slug": "minibench", "name": "MiniBench", "start_date": "2026-06-01"},
-                {"id": 2, "slug": "some-other-cup", "name": "Other", "start_date": "2026-05-01"},
-            ]
-        }
+        calls.append((path, params))
+        return [
+            {"id": 2, "slug": "minibench", "name": "MiniBench", "start_date": "2026-06-15"},
+            {"id": 1, "slug": "minibench-2026-06-01", "name": "MiniBench", "start_date": "2026-06-01"},
+        ]
 
     got = _client(fake_get).list_minibench_tournaments()
-    assert [t["slug"] for t in got] == ["minibench"]
-    assert "/projects/tournaments/minibench/" not in calls  # no fallback needed
+    assert [t["slug"] for t in got] == ["minibench-2026-06-01", "minibench"]
+    assert calls == [("/projects/minibenches/", None)]
 
 
 def test_list_tournaments_tolerates_bare_list_response():
@@ -74,12 +72,11 @@ def test_list_tournaments_tolerates_bare_list_response():
     assert [t["slug"] for t in got] == ["minibench-archive"]
 
 
-def test_list_tournaments_falls_back_to_slug_when_none_match():
+def test_list_tournaments_falls_back_to_slug_when_dedicated_listing_is_empty():
     def fake_get(path, params=None):
         if path == "/projects/tournaments/minibench/":
             return {"id": 42, "slug": "minibench", "name": "MiniBench"}
-        # Listing returns projects, but none are MiniBench.
-        return {"results": [{"id": 9, "slug": "unrelated", "name": "Unrelated"}]}
+        return []
 
     got = _client(fake_get).list_minibench_tournaments()
     assert [t["slug"] for t in got] == ["minibench"]
@@ -90,3 +87,29 @@ def test_list_tournaments_empty_when_listing_and_fallback_both_empty():
         return None  # nothing from the listing, nothing from the slug fetch
 
     assert _client(fake_get).list_minibench_tournaments() == []
+
+
+def test_get_leaderboard_uses_project_leaderboard_endpoint_and_nested_entries():
+    calls = []
+
+    def fake_get(path, params=None):
+        calls.append((path, params))
+        return [
+            {
+                "id": 7,
+                "entries": [
+                    {"rank": 2, "user": {"id": 12, "username": "second"}, "score": 4.0},
+                    {"rank": 1, "user": {"id": 11, "username": "first"}, "score": 5.0},
+                ],
+            }
+        ]
+
+    got = _client(fake_get).get_leaderboard(33074)
+
+    assert calls == [("/leaderboards/project/33074/", {"primary_only": "true", "with_entries": "true"})]
+    assert [entry["username"] for entry in got] == ["first", "second"]
+    assert [entry["user_id"] for entry in got] == [11, 12]
+
+
+def test_get_leaderboard_returns_empty_when_no_entries():
+    assert _client(lambda path, params=None: [{"id": 7, "entries": []}]).get_leaderboard(33074) == []
