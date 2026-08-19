@@ -3,9 +3,8 @@
 ISOLATION NOTE: every Metaculus HTTP call lives here so the rest of the package
 stays pure/testable. The endpoints below match the API that ``forecasting_tools``
 already uses for ``/posts/`` and token auth (verified), plus a few endpoints
-(``/users/me/``, tournament listing, leaderboard) that are Metaculus-standard but
-were NOT exercised from the build sandbox (its egress to metaculus.com is
-blocked). They run for real on the GitHub runner. If Metaculus has renamed one,
+(``/users/me/``, MiniBench listing, leaderboard) used by the Metaculus web
+application. They run for real on the GitHub runner. If Metaculus has renamed one,
 fix it here — nothing else imports ``requests``. Each method degrades gracefully
 (logs + returns empty/None) rather than crashing the whole run.
 """
@@ -45,7 +44,7 @@ class MetaculusClient:
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Token {self.token}", "Accept-Language": "en"}
 
-    def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | list[dict[str, Any]] | None:
         url = f"{_BASE}{path}"
         try:
             time.sleep(self._pace)
@@ -71,44 +70,24 @@ class MetaculusClient:
 
         MiniBench is a rolling series (a new ~2-week tournament every fortnight);
         the current one carries slug ``minibench`` and past ones are archived as
-        separate projects. We list tournament projects, keep those whose slug or
-        name looks like MiniBench, and sort chronologically so callers can index
-        (current == last, "two sessions ago" == last but two).
+        separate projects. We use Metaculus's dedicated MiniBench listing and
+        sort chronologically so callers can index (current == last,
+        "two sessions ago" == last but two).
 
-        The ``/projects/tournaments/`` listing was never exercised offline, so it
-        may not surface MiniBench at all. When the scan finds nothing we fall back
-        to fetching the current tournament by its known slug (the same path
-        ``forecasting_tools`` uses) so callers still get at least one tournament.
+        Metaculus deliberately omits unlisted projects (including MiniBench) from
+        ``/projects/tournaments/``. Its own MiniBench page uses the dedicated
+        ``/projects/minibenches/`` endpoint, which returns current and archived
+        sessions. If that endpoint returns nothing, fall back to the current slug.
         """
         found: dict[Any, dict[str, Any]] = {}
-        scanned = 0
-        sample: list[str] = []
-        offset = 0
-        while True:
-            page = self._get("/projects/tournaments/", {"limit": _PAGE, "offset": offset})
-            results = _results(page)
-            if not results:
-                break
-            for proj in results:
-                scanned += 1
-                slug = (proj.get("slug") or "").lower()
-                name = (proj.get("name") or "").lower()
-                if len(sample) < 25:
-                    sample.append(slug or name)
-                if "minibench" in slug or "minibench" in name or "mini bench" in name:
-                    found[proj.get("id", slug)] = proj
-            # Bare-list responses aren't paginated; stop after a single pass.
-            if not isinstance(page, dict) or len(results) < _PAGE:
-                break
-            offset += _PAGE
+        for project in _results(self._get("/projects/minibenches/")):
+            key = project.get("id") or project.get("slug")
+            if key:
+                found[key] = project
 
         if not found:
-            # Diagnostic: surface what the listing actually returned so a zero
-            # result is debuggable from the job log (we can't reach the API offline).
             logger.warning(
-                "No MiniBench tournament matched in %d scanned project(s); sample slugs: %s. Falling back to slug %r.",
-                scanned,
-                sample,
+                "The MiniBench listing returned no projects; falling back to slug %r.",
                 _CURRENT_MINIBENCH_SLUG,
             )
             current = self._get(f"/projects/tournaments/{_CURRENT_MINIBENCH_SLUG}/")
@@ -130,8 +109,17 @@ class MetaculusClient:
         results only. Entries are normalized to expose ``rank``, ``username``,
         ``user_id``, ``score``, ``take``, ``peer_score`` where present.
         """
-        data = self._get(f"/projects/{project_id}/leaderboard/")
-        entries = data.get("entries") if isinstance(data, dict) else (data if isinstance(data, list) else None)
+        data = self._get(
+            f"/leaderboards/project/{project_id}/",
+            {"primary_only": "true", "with_entries": "true"},
+        )
+        leaderboards = data if isinstance(data, list) else [data] if isinstance(data, dict) else []
+        entries = [
+            entry
+            for leaderboard in leaderboards
+            for entry in (leaderboard.get("entries") or [])
+            if isinstance(entry, dict)
+        ]
         if not entries:
             logger.warning("No leaderboard entries for project %s (endpoint shape may differ)", project_id)
             return []
