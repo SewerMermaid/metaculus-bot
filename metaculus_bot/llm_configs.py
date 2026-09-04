@@ -104,9 +104,7 @@ FORECASTER_LLMS: list[GeneralLlm] = [
 
 def build_smoke_forecaster_llms() -> list[GeneralLlm]:
     """Build the proposed four-model lineup used only by the manual smoke workflow."""
-    effort_config = {
-        key: value for key, value in REASONING_MODEL_CONFIG.items() if key not in {"temperature", "top_p"}
-    }
+    effort_config = {key: value for key, value in REASONING_MODEL_CONFIG.items() if key not in {"temperature", "top_p"}}
 
     return [
         build_llm_with_openrouter_fallback(

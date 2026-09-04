@@ -69,6 +69,7 @@ def _resolve_model(model_slug: str | None) -> str:
 
     return model_slug or os.getenv(GEMINI_SEARCH_MODEL_ENV, GEMINI_SEARCH_DEFAULT_MODEL)
 
+
 def _resolve_fallback_model(primary_model: str) -> str | None:
     fallback_model = os.getenv(GEMINI_SEARCH_FALLBACK_MODEL_ENV, "").strip()
     if not fallback_model or fallback_model == primary_model:
