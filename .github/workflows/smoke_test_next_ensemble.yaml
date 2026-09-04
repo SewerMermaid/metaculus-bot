@@ -91,11 +91,14 @@ jobs:
         run: poetry run python -m metaculus_bot.ensemble_smoke
         env:
           OAI_ANTH_OPENROUTER_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}
           GEMINI_SEARCH_ENABLED: 'true'
+          GEMINI_SEARCH_BACKEND: 'openrouter'
           GEMINI_SEARCH_MODEL: 'gemini-3.8-flash'
           GEMINI_SEARCH_FALLBACK_MODEL: 'gemini-3.7-flash'
+          GEMINI_USE_DONATED_OPENROUTER_KEY: 'true'
+          NATIVE_SEARCH_REASONING_EFFORT: 'high'
+          NATIVE_SEARCH_VERBOSITY: ''
           BINARY_STACKING_ENABLED: 'false'
           MC_STACKING_ENABLED: 'false'
           NUMERIC_STACKING_ENABLED: 'false'

@@ -5,7 +5,7 @@ Patterns mirror ``tests/test_native_search_provider.py``.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -164,6 +164,36 @@ async def test_provider_does_not_retry_without_fallback(monkeypatch: pytest.Monk
             await invoke_gemini_grounded("prompt")
 
     assert fake_client.aio.models.generate_content.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_openrouter_backend_retries_configured_model_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The OpenRouter backend retries 3.7 after a 3.8 model failure."""
+    monkeypatch.setenv("GEMINI_SEARCH_BACKEND", "openrouter")
+    monkeypatch.setenv("GEMINI_SEARCH_MODEL", "gemini-3.8-flash")
+    monkeypatch.setenv("GEMINI_SEARCH_FALLBACK_MODEL", "gemini-3.7-flash")
+
+    primary = SimpleNamespace(
+        model="openrouter/google/gemini-3.8-flash",
+        invoke=AsyncMock(side_effect=RuntimeError("primary unavailable")),
+    )
+    fallback = SimpleNamespace(
+        model="openrouter/google/gemini-3.7-flash",
+        invoke=AsyncMock(return_value="fallback research"),
+    )
+
+    with patch(
+        "metaculus_bot.research.gemini_search.build_native_search_llm",
+        side_effect=[primary, fallback],
+    ) as builder:
+        from metaculus_bot.research.gemini_search import gemini_search_provider
+
+        result = await gemini_search_provider()(_make_q("Will X happen?"))
+
+    assert result == "fallback research"
+    assert builder.call_args_list == [call("google/gemini-3.8-flash"), call("google/gemini-3.7-flash")]
+    assert "Will X happen?" in primary.invoke.await_args.args[0]
+    fallback.invoke.assert_awaited_once()
 
 
 @pytest.mark.asyncio

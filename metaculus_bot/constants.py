@@ -290,6 +290,7 @@ NATIVE_SEARCH_CONTEXT_SIZE: str = "high"  # "low", "medium", "high"
 # Search results (distinct from OpenRouter's Exa-backed :online plugin). Adds a
 # genuinely new search index to the ensemble.
 GEMINI_SEARCH_ENABLED_ENV: str = "GEMINI_SEARCH_ENABLED"
+GEMINI_SEARCH_BACKEND_ENV: str = "GEMINI_SEARCH_BACKEND"
 GEMINI_SEARCH_MODEL_ENV: str = "GEMINI_SEARCH_MODEL"
 GEMINI_SEARCH_FALLBACK_MODEL_ENV: str = "GEMINI_SEARCH_FALLBACK_MODEL"
 # GOOGLE_API_KEY is the operator's personal Google AI Studio key (in CI it's
