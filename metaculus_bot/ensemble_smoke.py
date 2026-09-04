@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from forecasting_tools import BinaryQuestion
 
@@ -64,7 +64,8 @@ def _required_env(name: str) -> str:
 def _make_smoke_question() -> BinaryQuestion:
     question_text = _required_env("SMOKE_QUESTION_TEXT")
     resolution_criteria = _required_env("SMOKE_RESOLUTION_CRITERIA")
-    now = datetime.now(timezone.utc)
+    # Prompt rendering currently compares these values with naive ``datetime.now()``.
+    now = datetime.now()
     return BinaryQuestion(
         question_text=question_text,
         id_of_post=999_999_001,

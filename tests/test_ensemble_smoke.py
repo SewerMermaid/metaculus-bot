@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from metaculus_bot import ensemble_smoke, llm_configs
 from metaculus_bot.aggregation_strategies import AggregationStrategy
+from metaculus_bot.prompts import binary_prompt
 
 
 def test_smoke_question_uses_required_user_inputs(monkeypatch) -> None:
@@ -17,6 +18,9 @@ def test_smoke_question_uses_required_user_inputs(monkeypatch) -> None:
     assert question.background_info == "Relevant facts supplied by the user."
     assert question.resolution_criteria == "Resolves YES if the event happens by December 31."
     assert question.fine_print == "Use the official announcement time."
+    assert question.open_time.tzinfo is None
+    assert question.scheduled_resolution_time.tzinfo is None
+    assert "Will the event happen by year-end?" in binary_prompt(question, "Research context")
 
 
 def test_smoke_question_rejects_missing_required_input(monkeypatch) -> None:
