@@ -99,7 +99,7 @@ async def _invoke_openrouter_model(prompt: str, model: str) -> str:
 
 
 async def invoke_gemini_openrouter(prompt: str, *, model_slug: str | None = None) -> str:
-    """Invoke Gemini through OpenRouter, retrying the configured backup model once."""
+    """Invoke Gemini through OpenRouter, skipping it if primary and backup fail."""
     primary_model = _resolve_model(model_slug)
     fallback_model = _resolve_fallback_model(primary_model)
     try:
@@ -114,7 +114,17 @@ async def invoke_gemini_openrouter(prompt: str, *, model_slug: str | None = None
             primary_error,
             fallback_model,
         )
-        return await _invoke_openrouter_model(prompt, fallback_model)
+        try:
+            return await _invoke_openrouter_model(prompt, fallback_model)
+        except Exception as fallback_error:
+            logger.warning(
+                "GeminiSearch(OpenRouter): fallback %s also failed (%s: %s); "
+                "skipping Gemini research for this question",
+                fallback_model,
+                type(fallback_error).__name__,
+                fallback_error,
+            )
+            return ""
 
 
 async def _generate_grounded_response(

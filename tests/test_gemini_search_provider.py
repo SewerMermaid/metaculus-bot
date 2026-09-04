@@ -197,6 +197,35 @@ async def test_openrouter_backend_retries_configured_model_fallback(monkeypatch:
 
 
 @pytest.mark.asyncio
+async def test_openrouter_backend_skips_gemini_when_fallback_also_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both model failures return empty research instead of failing the workflow."""
+    monkeypatch.setenv("GEMINI_SEARCH_BACKEND", "openrouter")
+    monkeypatch.setenv("GEMINI_SEARCH_MODEL", "gemini-3.8-flash")
+    monkeypatch.setenv("GEMINI_SEARCH_FALLBACK_MODEL", "gemini-3.7-flash")
+
+    primary = SimpleNamespace(
+        model="openrouter/google/gemini-3.8-flash",
+        invoke=AsyncMock(side_effect=RuntimeError("primary unavailable")),
+    )
+    fallback = SimpleNamespace(
+        model="openrouter/google/gemini-3.7-flash",
+        invoke=AsyncMock(side_effect=RuntimeError("fallback unavailable")),
+    )
+
+    with patch(
+        "metaculus_bot.research.gemini_search.build_native_search_llm",
+        side_effect=[primary, fallback],
+    ):
+        from metaculus_bot.research.gemini_search import gemini_search_provider
+
+        result = await gemini_search_provider()(_make_q("Will X happen?"))
+
+    assert result == ""
+    primary.invoke.assert_awaited_once()
+    fallback.invoke.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_provider_uses_explicit_slug(monkeypatch: pytest.MonkeyPatch) -> None:
     """Explicit ``model_slug=`` param takes precedence over env var."""
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
