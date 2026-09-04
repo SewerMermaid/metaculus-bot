@@ -37,6 +37,7 @@ def test_smoke_workflow_enables_gemini_38_grounded_research() -> None:
     assert "GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}" in workflow
     assert "GEMINI_SEARCH_ENABLED: 'true'" in workflow
     assert "GEMINI_SEARCH_MODEL: 'gemini-3.8-flash'" in workflow
+    assert "GEMINI_SEARCH_FALLBACK_MODEL: 'gemini-3.7-flash'" in workflow
 
 
 def test_production_lineup_is_unchanged() -> None:

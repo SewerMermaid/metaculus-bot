@@ -291,6 +291,7 @@ NATIVE_SEARCH_CONTEXT_SIZE: str = "high"  # "low", "medium", "high"
 # genuinely new search index to the ensemble.
 GEMINI_SEARCH_ENABLED_ENV: str = "GEMINI_SEARCH_ENABLED"
 GEMINI_SEARCH_MODEL_ENV: str = "GEMINI_SEARCH_MODEL"
+GEMINI_SEARCH_FALLBACK_MODEL_ENV: str = "GEMINI_SEARCH_FALLBACK_MODEL"
 # GOOGLE_API_KEY is the operator's personal Google AI Studio key (in CI it's
 # stored as ``secrets.GEMINI_API_KEY`` and surfaced as GOOGLE_API_KEY for the
 # google-genai SDK). The grounded-search provider always reads this — it has
@@ -304,9 +305,9 @@ GOOGLE_API_KEY_ENV: str = "GOOGLE_API_KEY"
 # search provider — that always uses the personal GOOGLE_API_KEY. Default off
 # because the donated-key Google route has been flaky.
 GEMINI_USE_DONATED_OPENROUTER_KEY_ENV: str = "GEMINI_USE_DONATED_OPENROUTER_KEY"
-# Gemini 3 Flash preview model with grounding support. Requires billing enabled
-# on the Google AI Studio project to unlock; falls back to gemini-2.5-flash on
-# free tier if needed. Override via GEMINI_SEARCH_MODEL env var.
+# Gemini 3 Flash preview model with grounding support. Override the primary via
+# GEMINI_SEARCH_MODEL. An optional GEMINI_SEARCH_FALLBACK_MODEL is retried once
+# after a primary SDK error or timeout; when unset, no fallback is attempted.
 GEMINI_SEARCH_DEFAULT_MODEL: str = "gemini-3-flash-preview"
 # No temperature / top_p / max_tokens overrides — use google-genai SDK defaults.
 # Gemini 3 Flash is a thinking model; Google's defaults are tuned for it and
