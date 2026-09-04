@@ -1,0 +1,106 @@
+name: Smoke test proposed ensemble (paid, no publish)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_paid:
+        description: Confirm one paid four-model ensemble forecast
+        required: true
+        default: false
+        type: boolean
+      question_text:
+        description: Binary forecasting question
+        required: true
+        type: string
+      background_info:
+        description: Background information available to the forecasters
+        required: false
+        default: ""
+        type: string
+      resolution_criteria:
+        description: Exact criteria for resolving YES or NO
+        required: true
+        type: string
+      fine_print:
+        description: Optional edge cases or additional resolution details
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: ${{ inputs.confirm_paid }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        id: setup-python
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        continue-on-error: true
+        with:
+          version: 2.2.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Ensure Poetry is available
+        run: |
+          poetry --version || (
+            python -m pip install -U pip &&
+            for i in 1 2 3; do
+              python -m pip install "poetry==2.2.1" && break || sleep 10;
+            done &&
+            poetry --version
+          )
+
+      - name: Load cached virtual environment
+        id: cached-poetry-dependencies
+        uses: actions/cache@v5
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          max_attempts: 3
+          retry_on: error
+          timeout_minutes: 10
+          command: poetry install --no-interaction --no-root
+        env:
+          POETRY_VIRTUALENVS_CREATE: true
+          POETRY_VIRTUALENVS_IN_PROJECT: true
+          POETRY_INSTALLER_PARALLEL: true
+
+      - name: Run proposed ensemble smoke test
+        run: poetry run python -m metaculus_bot.ensemble_smoke
+        env:
+          OAI_ANTH_OPENROUTER_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_SEARCH_ENABLED: 'true'
+          GEMINI_SEARCH_MODEL: 'gemini-3.8-flash'
+          BINARY_STACKING_ENABLED: 'false'
+          MC_STACKING_ENABLED: 'false'
+          NUMERIC_STACKING_ENABLED: 'false'
+          OPENAI_AGENTS_DISABLE_TRACING: 'true'
+          PYTHONUNBUFFERED: '1'
+          SMOKE_QUESTION_TEXT: ${{ inputs.question_text }}
+          SMOKE_BACKGROUND_INFO: ${{ inputs.background_info }}
+          SMOKE_RESOLUTION_CRITERIA: ${{ inputs.resolution_criteria }}
+          SMOKE_FINE_PRINT: ${{ inputs.fine_print }}
