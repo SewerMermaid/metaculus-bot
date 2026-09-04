@@ -4,10 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       confirm_paid:
-        description: Confirm six paid requests capped at 2048 output tokens each
+        description: Confirm paid requests capped at 2048 output tokens each
         required: true
         default: false
         type: boolean
+      target:
+        description: Select all models or one model to probe
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - anthropic/claude-fable-5.1
+          - anthropic/claude-opus-5
+          - openai/gpt-5.6-sol
+          - openai/gpt-5.6-terra
+          - google/gemini-3.8-flash
+          - google/gemini-3.7-flash
 
 permissions:
   contents: read
@@ -18,9 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Send six capped prompts
+      - name: Send selected capped prompts
         env:
           OPENROUTER_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}
+          TARGET_MODEL: ${{ inputs.target }}
         shell: bash
         run: |
           set -euo pipefail
@@ -123,6 +137,13 @@ jobs:
           if not api_key:
               raise SystemExit("OAI_ANTH_OPENROUTER_KEY is not configured")
 
+          target = os.environ.get("TARGET_MODEL", "all")
+          selected_specs = (
+              MODEL_SPECS if target == "all" else tuple(spec for spec in MODEL_SPECS if spec[0] == target)
+          )
+          if not selected_specs:
+              raise SystemExit(f"Unsupported target model: {target}")
+
           summary_lines = [
               "# Selected-model donated-key smoke test",
               "",
@@ -131,7 +152,7 @@ jobs:
               "",
           ]
           failed = False
-          for model, effort in MODEL_SPECS:
+          for model, effort in selected_specs:
               succeeded, lines = probe(model, effort, api_key)
               summary_lines.extend(lines)
               failed = failed or not succeeded
