@@ -1,0 +1,123 @@
+name: Check OpenRouter credits and model access
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_query:
+        description: Model name or slug to look for
+        required: false
+        default: fable
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Query balances and accessible models
+        env:
+          DONATED_OPENROUTER_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}
+          PERSONAL_OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MODEL_QUERY: ${{ inputs.model_query }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          AUTH_KEY_URL = "https://openrouter.ai/api/v1/auth/key"
+          USER_MODELS_URL = "https://openrouter.ai/api/v1/models/user"
+
+
+          def fetch_json(url: str, api_key: str) -> dict:
+              request = urllib.request.Request(
+                  url,
+                  headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as exc:
+                  raise RuntimeError(f"OpenRouter returned HTTP {exc.code}") from exc
+              except urllib.error.URLError as exc:
+                  raise RuntimeError(f"OpenRouter request failed: {exc.reason}") from exc
+
+
+          def usd(value: object) -> str:
+              if value is None:
+                  return "n/a"
+              try:
+                  return f"${float(value):,.2f}"
+              except (TypeError, ValueError):
+                  return str(value)
+
+
+          def report_for_key(label: str, api_key: str, model_query: str) -> list[str]:
+              auth_payload = fetch_json(AUTH_KEY_URL, api_key)
+              auth = auth_payload.get("data", auth_payload)
+
+              models_payload = fetch_json(USER_MODELS_URL, api_key)
+              models = models_payload.get("data", [])
+              query = model_query.casefold()
+              matches = sorted(
+                  model["id"]
+                  for model in models
+                  if isinstance(model, dict)
+                  and isinstance(model.get("id"), str)
+                  and (query in model["id"].casefold() or query in str(model.get("name", "")).casefold())
+              )
+
+              lines = [
+                  f"## {label}",
+                  "",
+                  f"- Limit: {usd(auth.get('limit'))}",
+                  f"- Remaining: {usd(auth.get('limit_remaining'))}",
+                  f"- Used: {usd(auth.get('usage'))}",
+                  f"- Used today: {usd(auth.get('usage_daily'))}",
+                  f"- Used this week: {usd(auth.get('usage_weekly'))}",
+                  f"- Used this month: {usd(auth.get('usage_monthly'))}",
+                  f"- Free tier: {auth.get('is_free_tier', 'n/a')}",
+                  f"- Visible models: {len(models)}",
+                  f"- Models matching `{model_query}`: {len(matches)}",
+              ]
+              lines.extend(f"  - `{model_id}`" for model_id in matches)
+              lines.append("")
+              return lines
+
+
+          model_query = os.environ.get("MODEL_QUERY", "").strip() or "fable"
+          key_specs = (
+              ("Metaculus-donated key", "DONATED_OPENROUTER_KEY"),
+              ("Personal key", "PERSONAL_OPENROUTER_KEY"),
+          )
+          summary_lines = ["# OpenRouter credit and model-access check", ""]
+          failures = []
+
+          for label, env_name in key_specs:
+              api_key = os.environ.get(env_name)
+              if not api_key:
+                  failures.append(f"{label}: GitHub secret is not configured")
+                  continue
+              try:
+                  summary_lines.extend(report_for_key(label, api_key, model_query))
+              except RuntimeError as exc:
+                  failures.append(f"{label}: {exc}")
+
+          if failures:
+              summary_lines.extend(["## Errors", "", *(f"- {failure}" for failure in failures), ""])
+
+          summary = "\n".join(summary_lines)
+          print(summary)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary_file:
+              summary_file.write(summary + "\n")
+
+          if failures:
+              sys.exit(1)
+          PY
