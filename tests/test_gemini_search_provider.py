@@ -127,6 +127,46 @@ async def test_provider_uses_env_override(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.asyncio
+async def test_provider_retries_configured_fallback_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An SDK failure on the primary model retries the configured fallback once."""
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    monkeypatch.setenv("GEMINI_SEARCH_MODEL", "gemini-3.8-flash")
+    monkeypatch.setenv("GEMINI_SEARCH_FALLBACK_MODEL", "gemini-3.7-flash")
+
+    response = _make_response("fallback research")
+    fake_client = _make_client_with_response(response)
+    fake_client.aio.models.generate_content.side_effect = [RuntimeError("primary unavailable"), response]
+
+    with patch("metaculus_bot.research.gemini_search.genai.Client", return_value=fake_client):
+        from metaculus_bot.research.gemini_search import invoke_gemini_grounded
+
+        result = await invoke_gemini_grounded("prompt")
+
+    assert result == "fallback research"
+    calls = fake_client.aio.models.generate_content.await_args_list
+    assert [call.kwargs["model"] for call in calls] == ["gemini-3.8-flash", "gemini-3.7-flash"]
+
+
+@pytest.mark.asyncio
+async def test_provider_does_not_retry_without_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Existing workflows keep their one-call behavior when no fallback is configured."""
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    monkeypatch.setenv("GEMINI_SEARCH_MODEL", "gemini-3.8-flash")
+    monkeypatch.delenv("GEMINI_SEARCH_FALLBACK_MODEL", raising=False)
+
+    fake_client = _make_client_with_response(_make_response("unused"))
+    fake_client.aio.models.generate_content.side_effect = RuntimeError("primary unavailable")
+
+    with patch("metaculus_bot.research.gemini_search.genai.Client", return_value=fake_client):
+        from metaculus_bot.research.gemini_search import invoke_gemini_grounded
+
+        with pytest.raises(RuntimeError, match="primary unavailable"):
+            await invoke_gemini_grounded("prompt")
+
+    assert fake_client.aio.models.generate_content.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_provider_uses_explicit_slug(monkeypatch: pytest.MonkeyPatch) -> None:
     """Explicit ``model_slug=`` param takes precedence over env var."""
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")

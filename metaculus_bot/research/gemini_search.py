@@ -21,6 +21,7 @@ from google.genai import types as genai_types
 
 from metaculus_bot.constants import (
     GEMINI_SEARCH_DEFAULT_MODEL,
+    GEMINI_SEARCH_FALLBACK_MODEL_ENV,
     GEMINI_SEARCH_MODEL_ENV,
     GEMINI_SEARCH_TIMEOUT,
     GOOGLE_API_KEY_ENV,
@@ -65,7 +66,32 @@ def build_gemini_client() -> genai.Client:
 
 
 def _resolve_model(model_slug: str | None) -> str:
+
     return model_slug or os.getenv(GEMINI_SEARCH_MODEL_ENV, GEMINI_SEARCH_DEFAULT_MODEL)
+
+
+def _resolve_fallback_model(primary_model: str) -> str | None:
+    fallback_model = os.getenv(GEMINI_SEARCH_FALLBACK_MODEL_ENV, "").strip()
+    if not fallback_model or fallback_model == primary_model:
+        return None
+    return fallback_model
+
+
+async def _generate_grounded_response(
+    client: genai.Client,
+    model: str,
+    prompt: str,
+    config: genai_types.GenerateContentConfig,
+) -> genai_types.GenerateContentResponse:
+    logger.info(f"GeminiSearch: calling {model} with grounding")
+    try:
+        return await asyncio.wait_for(
+            client.aio.models.generate_content(model=model, contents=prompt, config=config),
+            timeout=GEMINI_SEARCH_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"GeminiSearch: {model} timed out after {GEMINI_SEARCH_TIMEOUT}s")
+        raise
 
 
 def _format_grounded_response(response: genai_types.GenerateContentResponse) -> str:
@@ -160,7 +186,8 @@ async def invoke_gemini_grounded(
     Raises on SDK errors — callers decide whether to fail hard or soft.
     """
     client = build_gemini_client()
-    model = _resolve_model(model_slug)
+    primary_model = _resolve_model(model_slug)
+    fallback_model = _resolve_fallback_model(primary_model)
 
     tools: list[Any] = [{"google_search": {}}]
     if include_url_context:
@@ -168,15 +195,31 @@ async def invoke_gemini_grounded(
 
     config = genai_types.GenerateContentConfig(tools=tools)
 
-    logger.info(f"GeminiSearch: calling {model} with grounding")
     try:
-        response = await asyncio.wait_for(
-            client.aio.models.generate_content(model=model, contents=prompt, config=config),
-            timeout=GEMINI_SEARCH_TIMEOUT,
+        response = await _generate_grounded_response(
+            client,
+            primary_model,
+            prompt,
+            config,
         )
-    except asyncio.TimeoutError:
-        logger.warning(f"GeminiSearch: {model} timed out after {GEMINI_SEARCH_TIMEOUT}s")
-        raise
+        model = primary_model
+    except Exception as primary_error:
+        if fallback_model is None:
+            raise
+        logger.warning(
+            "GeminiSearch: %s failed (%s: %s); retrying once with fallback %s",
+            primary_model,
+            type(primary_error).__name__,
+            primary_error,
+            fallback_model,
+        )
+        response = await _generate_grounded_response(
+            client,
+            fallback_model,
+            prompt,
+            config,
+        )
+        model = fallback_model
 
     formatted = _format_grounded_response(response)
     n_chunks = 0
