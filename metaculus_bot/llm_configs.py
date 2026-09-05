@@ -11,7 +11,6 @@ from metaculus_bot.fallback_openrouter import build_llm_with_openrouter_fallback
 __all__ = [
     "FORECASTER_LLMS",
     "FORECASTER_MODEL_NAMES",
-    "build_smoke_forecaster_llms",
     "SUMMARIZER_LLM",
     "PARSER_LLM",
     "RESEARCHER_LLM",
@@ -95,36 +94,6 @@ FORECASTER_LLMS: list[GeneralLlm] = [
     #     **REASONING_MODEL_CONFIG,
     # ),
 ]
-
-
-def build_smoke_forecaster_llms() -> list[GeneralLlm]:
-    """Build the proposed four-model lineup used only by the manual smoke workflow."""
-    effort_config = {key: value for key, value in REASONING_MODEL_CONFIG.items() if key not in {"temperature", "top_p"}}
-
-    return [
-        build_llm_with_openrouter_fallback(
-            model="openrouter/openai/gpt-5.6-terra",
-            reasoning={"effort": "high"},
-            **effort_config,
-        ),
-        build_llm_with_openrouter_fallback(
-            model="openrouter/openai/gpt-5.6-sol",
-            reasoning={"effort": "high"},
-            **effort_config,
-        ),
-        build_llm_with_openrouter_fallback(
-            model="openrouter/anthropic/claude-fable-5",
-            reasoning={"effort": "high"},
-            extra_body={"verbosity": "high"},
-            **effort_config,
-        ),
-        build_llm_with_openrouter_fallback(
-            model="openrouter/anthropic/claude-opus-5",
-            reasoning={"effort": "high"},
-            extra_body={"verbosity": "high"},
-            **effort_config,
-        ),
-    ]
 
 
 def _forecaster_display_name(llm: GeneralLlm) -> str:

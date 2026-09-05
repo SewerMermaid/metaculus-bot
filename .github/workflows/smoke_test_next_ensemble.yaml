@@ -1,10 +1,10 @@
-name: Smoke test proposed ensemble (paid, no publish)
+name: Smoke test production ensemble (paid, no publish)
 
 on:
   workflow_dispatch:
     inputs:
       confirm_paid:
-        description: Confirm one paid four-model ensemble forecast
+        description: Confirm one paid production-ensemble forecast
         required: true
         default: false
         type: boolean
@@ -87,18 +87,15 @@ jobs:
           POETRY_VIRTUALENVS_IN_PROJECT: true
           POETRY_INSTALLER_PARALLEL: true
 
-      - name: Run proposed ensemble smoke test
+      - name: Run production ensemble smoke test
         run: poetry run python -m metaculus_bot.ensemble_smoke
         env:
           OAI_ANTH_OPENROUTER_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}
-          GEMINI_SEARCH_ENABLED: 'true'
-          GEMINI_SEARCH_BACKEND: 'openrouter'
-          GEMINI_SEARCH_MODEL: 'gemini-3.8-flash'
-          GEMINI_SEARCH_FALLBACK_MODEL: 'gemini-3.7-flash'
+          # Gemini remains a base forecaster; only its separate research-provider
+          # role is disabled for this isolated custom-question test.
+          GEMINI_SEARCH_ENABLED: 'false'
           GEMINI_USE_DONATED_OPENROUTER_KEY: 'true'
-          NATIVE_SEARCH_REASONING_EFFORT: 'high'
-          NATIVE_SEARCH_VERBOSITY: ''
           BINARY_STACKING_ENABLED: 'false'
           MC_STACKING_ENABLED: 'false'
           NUMERIC_STACKING_ENABLED: 'false'

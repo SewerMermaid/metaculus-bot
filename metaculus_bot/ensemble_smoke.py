@@ -1,4 +1,4 @@
-"""Paid, non-publishing smoke test for the proposed four-model ensemble."""
+"""Paid, non-publishing custom-question test for the production ensemble."""
 
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ from metaculus_bot.fallback_openrouter import (
 from metaculus_bot.forecaster import TemplateForecaster
 from metaculus_bot.llm_configs import (
     DISAGREEMENT_ANALYZER_LLM,
+    FORECASTER_LLMS,
     PARSER_LLM,
     RESEARCHER_LLM,
     STACKER_LLM,
     SUMMARIZER_LLM,
-    build_smoke_forecaster_llms,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ async def _fixed_research(question: BinaryQuestion) -> str:
 
 
 def build_smoke_forecaster() -> TemplateForecaster:
-    """Build the production forecasting architecture with only the proposed base lineup substituted."""
+    """Build the production ensemble around a non-publishing custom question."""
     return TemplateForecaster(
         research_reports_per_question=1,
         predictions_per_research_report=1,
@@ -44,7 +44,7 @@ def build_smoke_forecaster() -> TemplateForecaster:
         research_provider=_fixed_research,
         max_questions_per_run=1,
         llms={
-            "forecasters": build_smoke_forecaster_llms(),
+            "forecasters": FORECASTER_LLMS,
             "stacker": STACKER_LLM,
             "analyzer": DISAGREEMENT_ANALYZER_LLM,
             "summarizer": SUMMARIZER_LLM,
@@ -106,14 +106,11 @@ async def run_smoke() -> float:
 
     summary = "\n".join(
         [
-            "# Proposed ensemble smoke test",
+            "# Production ensemble custom-question smoke test",
             "",
             "- Publication: disabled",
             "- Question: custom binary question supplied for this workflow run",
-            "- Research: user-supplied background plus Gemini web research via OpenRouter",
-            f"- Gemini research backend: {os.environ.get('GEMINI_SEARCH_BACKEND', 'google')}",
-            f"- Gemini research model: {os.environ.get('GEMINI_SEARCH_MODEL', 'disabled')}",
-            f"- Gemini fallback model: {os.environ.get('GEMINI_SEARCH_FALLBACK_MODEL', 'none')}",
+            "- Research: user-supplied background only (Gemini research disabled)",
             "- Aggregation: conditional stacking with production-equivalent stacking flags",
             f"- Models: {', '.join(models)}",
             f"- Aggregate binary prediction: {float(prediction):.4f}",
