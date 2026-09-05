@@ -48,12 +48,13 @@ def test_smoke_workflow_uses_funded_openrouter_key_for_gemini_research() -> None
     assert "NATIVE_SEARCH_REASONING_EFFORT: 'high'" in workflow
 
 
-def test_production_lineup_is_unchanged() -> None:
+def test_production_lineup_includes_gemini_38_flash() -> None:
     assert [llm.model for llm in llm_configs.FORECASTER_LLMS] == [
         "openrouter/openai/gpt-5.4",
         "openrouter/openai/gpt-5.5",
         "openrouter/anthropic/claude-opus-4.8",
         "openrouter/anthropic/claude-opus-4.6",
+        "openrouter/google/gemini-3.8-flash",
     ]
 
 
