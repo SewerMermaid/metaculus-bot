@@ -17,11 +17,11 @@ from metaculus_bot.fallback_openrouter import (
 from metaculus_bot.forecaster import TemplateForecaster
 from metaculus_bot.llm_configs import (
     DISAGREEMENT_ANALYZER_LLM,
-    FORECASTER_LLMS,
     PARSER_LLM,
     RESEARCHER_LLM,
     STACKER_LLM,
     SUMMARIZER_LLM,
+    TEST_FORECASTER_LLMS,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ def build_smoke_forecaster() -> TemplateForecaster:
         research_provider=_fixed_research,
         max_questions_per_run=1,
         llms={
-            "forecasters": FORECASTER_LLMS,
+            "forecasters": TEST_FORECASTER_LLMS,
             "stacker": STACKER_LLM,
             "analyzer": DISAGREEMENT_ANALYZER_LLM,
             "summarizer": SUMMARIZER_LLM,

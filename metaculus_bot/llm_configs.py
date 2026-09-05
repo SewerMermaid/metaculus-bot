@@ -9,7 +9,9 @@ from forecasting_tools import GeneralLlm
 from metaculus_bot.fallback_openrouter import build_llm_with_openrouter_fallback
 
 __all__ = [
+    "CUP_FORECASTER_LLMS",
     "FORECASTER_LLMS",
+    "TEST_FORECASTER_LLMS",
     "FORECASTER_MODEL_NAMES",
     "SUMMARIZER_LLM",
     "PARSER_LLM",
@@ -26,6 +28,12 @@ REASONING_MODEL_CONFIG = {
     "stream": False,
     "timeout": 480,
     "allowed_tries": 3,
+}
+# Current effort-controlled OpenAI/Anthropic models reject legacy sampling
+# parameters such as temperature/top_p. Keep the shared timeout/retry/output
+# limits while letting the provider's high-reasoning preset control sampling.
+EFFORT_MODEL_CONFIG = {
+    key: value for key, value in REASONING_MODEL_CONFIG.items() if key not in {"temperature", "top_p"}
 }
 QWEN_CONFIG = {  # developer recommends this for qwen models
     "temperature": 0.6,
@@ -53,6 +61,54 @@ ACCEPTABLE_QUANTS = [
 
 FORECASTER_LLMS: list[GeneralLlm] = [
     build_llm_with_openrouter_fallback(
+        model="openrouter/openai/gpt-5.6-terra",
+        reasoning={"effort": "high"},
+        **EFFORT_MODEL_CONFIG,
+    ),
+    build_llm_with_openrouter_fallback(
+        model="openrouter/openai/gpt-5.6-sol",
+        reasoning={"effort": "high"},
+        **EFFORT_MODEL_CONFIG,
+    ),
+    build_llm_with_openrouter_fallback(
+        model="openrouter/anthropic/claude-fable-5.1",
+        reasoning={"effort": "high"},
+        extra_body={"verbosity": "high"},
+        **EFFORT_MODEL_CONFIG,
+    ),
+    build_llm_with_openrouter_fallback(
+        model="openrouter/anthropic/claude-opus-5",
+        reasoning={"effort": "high"},
+        extra_body={"verbosity": "high"},
+        **EFFORT_MODEL_CONFIG,
+    ),
+]
+
+# Test-only extension of the production ensemble. Gemini stays available for
+# the fixed-question Test Bot and the custom, non-publishing smoke test, but is
+# deliberately excluded from FutureEval and MiniBench competition forecasts.
+TEST_FORECASTER_LLMS: list[GeneralLlm] = [
+    *FORECASTER_LLMS,
+    build_llm_with_openrouter_fallback(
+        model="openrouter/google/gemini-3.8-flash",
+        reasoning={"effort": "high"},
+        **REASONING_MODEL_CONFIG,
+    ),
+    # 2026-05-18: migrated from x-ai/grok-4.1-fast (deprecated 2026-05-15 by xAI).
+    # Added explicit reasoning effort=high to match the gpt-5.4/5.5 reasoning peers
+    # (4.3 defaults to low effort if unspecified, vs. 4.1-fast which had no effort flag).
+    # build_llm_with_openrouter_fallback(
+    #     model="openrouter/x-ai/grok-4.3",
+    #     reasoning={"effort": "high"},
+    #     **REASONING_MODEL_CONFIG,
+    # ),
+]
+
+# The user requested the frontier lineup specifically for FutureEval,
+# MiniBench, and their production smoke tests. The unrelated Metaculus Cup
+# workflow retains its existing lineup until it is deliberately migrated.
+CUP_FORECASTER_LLMS: list[GeneralLlm] = [
+    build_llm_with_openrouter_fallback(
         model="openrouter/openai/gpt-5.4",
         reasoning={"effort": "high"},
         **REASONING_MODEL_CONFIG,
@@ -70,29 +126,15 @@ FORECASTER_LLMS: list[GeneralLlm] = [
     ),
     build_llm_with_openrouter_fallback(
         model="openrouter/anthropic/claude-opus-4.6",
-        # Explicit max_tokens forces budget-based thinking. Without it, Opus 4.6 defaults to
-        # "adaptive thinking" (OpenRouter 4.6 migration guide) which is unbounded and has
-        # caused silent 600s soft-deadline stalls on hard questions (e.g. Q14333 on 2026-05-07).
         reasoning={"max_tokens": 32_000},
         extra_body={"verbosity": "high"},
         **REASONING_MODEL_CONFIG,
     ),
-    # Restored after the donated OpenRouter route successfully served a direct
-    # Gemini 3.8 Flash probe. This is a base forecaster, independent of the
-    # optional Gemini grounded-search research provider.
     build_llm_with_openrouter_fallback(
         model="openrouter/google/gemini-3.8-flash",
         reasoning={"effort": "high"},
         **REASONING_MODEL_CONFIG,
     ),
-    # 2026-05-18: migrated from x-ai/grok-4.1-fast (deprecated 2026-05-15 by xAI).
-    # Added explicit reasoning effort=high to match the gpt-5.4/5.5 reasoning peers
-    # (4.3 defaults to low effort if unspecified, vs. 4.1-fast which had no effort flag).
-    # build_llm_with_openrouter_fallback(
-    #     model="openrouter/x-ai/grok-4.3",
-    #     reasoning={"effort": "high"},
-    #     **REASONING_MODEL_CONFIG,
-    # ),
 ]
 
 

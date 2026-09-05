@@ -24,12 +24,14 @@ from metaculus_bot.fallback_openrouter import (
 from metaculus_bot.fetch_hardening import apply_fetch_hardening
 from metaculus_bot.forecaster import TemplateForecaster
 from metaculus_bot.llm_configs import (
+    CUP_FORECASTER_LLMS,
     DISAGREEMENT_ANALYZER_LLM,
     FORECASTER_LLMS,
     PARSER_LLM,
     RESEARCHER_LLM,
     STACKER_LLM,
     SUMMARIZER_LLM,
+    TEST_FORECASTER_LLMS,
 )
 from metaculus_bot.publish_hardening import apply_publish_hardening
 
@@ -82,6 +84,16 @@ def main() -> None:
     args = parser.parse_args()
     run_mode: Literal["tournament", "minibench", "quarterly_cup", "metaculus_cup", "test_questions"] = args.mode
 
+    # FutureEval/tournament and MiniBench use the four-model competition
+    # ensemble. Test mode adds Gemini; the unrelated Cup workflow retains its
+    # prior lineup until it is explicitly migrated.
+    if run_mode in ("quarterly_cup", "metaculus_cup"):
+        forecaster_llms = CUP_FORECASTER_LLMS
+    elif run_mode == "test_questions":
+        forecaster_llms = TEST_FORECASTER_LLMS
+    else:
+        forecaster_llms = FORECASTER_LLMS
+
     # Wire research persistence if enabled (production GHA runs set this env var)
     research_writer = None
     research_sink = None
@@ -104,7 +116,7 @@ def main() -> None:
         aggregation_strategy=AggregationStrategy.CONDITIONAL_STACKING,
         research_sink=research_sink,
         llms={
-            "forecasters": FORECASTER_LLMS,
+            "forecasters": forecaster_llms,
             "stacker": STACKER_LLM,
             "analyzer": DISAGREEMENT_ANALYZER_LLM,
             "summarizer": SUMMARIZER_LLM,

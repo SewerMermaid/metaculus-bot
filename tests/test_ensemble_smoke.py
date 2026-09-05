@@ -46,8 +46,54 @@ def test_smoke_workflow_disables_gemini_research_but_routes_gemini_forecaster() 
     assert "GEMINI_USE_DONATED_OPENROUTER_KEY: 'true'" in workflow
 
 
-def test_production_lineup_includes_gemini_38_flash() -> None:
+def test_competition_workflows_disable_all_gemini_routes() -> None:
+    workflow_paths = [
+        Path(".github/workflows/run_bot_on_tournament.yaml"),
+        Path(".github/workflows/run_bot_on_minibench.yaml"),
+    ]
+
+    for workflow_path in workflow_paths:
+        workflow = workflow_path.read_text(encoding="utf-8")
+        assert "GEMINI_SEARCH_ENABLED: 'false'" in workflow
+        assert "GAP_FILL_ENABLED: 'false'" in workflow
+        assert "GOOGLE_API_KEY:" not in workflow
+        assert "GEMINI_USE_DONATED_OPENROUTER_KEY:" not in workflow
+
+
+def test_production_lineup_excludes_gemini() -> None:
     assert [llm.model for llm in llm_configs.FORECASTER_LLMS] == [
+        "openrouter/openai/gpt-5.6-terra",
+        "openrouter/openai/gpt-5.6-sol",
+        "openrouter/anthropic/claude-fable-5.1",
+        "openrouter/anthropic/claude-opus-5",
+    ]
+    assert [llm.litellm_kwargs["reasoning"] for llm in llm_configs.FORECASTER_LLMS] == [
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+    ]
+
+
+def test_test_lineup_adds_gemini_38_flash() -> None:
+    assert [llm.model for llm in llm_configs.TEST_FORECASTER_LLMS] == [
+        "openrouter/openai/gpt-5.6-terra",
+        "openrouter/openai/gpt-5.6-sol",
+        "openrouter/anthropic/claude-fable-5.1",
+        "openrouter/anthropic/claude-opus-5",
+        "openrouter/google/gemini-3.8-flash",
+    ]
+    assert [llm.litellm_kwargs["reasoning"] for llm in llm_configs.TEST_FORECASTER_LLMS] == [
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+    ]
+
+
+def test_metaculus_cup_retains_previous_lineup() -> None:
+    assert [llm.model for llm in llm_configs.CUP_FORECASTER_LLMS] == [
         "openrouter/openai/gpt-5.4",
         "openrouter/openai/gpt-5.5",
         "openrouter/anthropic/claude-opus-4.8",
@@ -65,7 +111,7 @@ def test_smoke_forecaster_preserves_production_architecture_without_publishing(m
         captured.update(kwargs)
         return sentinel
 
-    monkeypatch.setattr(ensemble_smoke, "FORECASTER_LLMS", smoke_llms)
+    monkeypatch.setattr(ensemble_smoke, "TEST_FORECASTER_LLMS", smoke_llms)
     monkeypatch.setattr(ensemble_smoke, "TemplateForecaster", fake_forecaster)
 
     result = ensemble_smoke.build_smoke_forecaster()
