@@ -11,6 +11,7 @@ from metaculus_bot.fallback_openrouter import build_llm_with_openrouter_fallback
 __all__ = [
     "CUP_FORECASTER_LLMS",
     "FORECASTER_LLMS",
+    "TEST_FORECASTER_LLMS",
     "FORECASTER_MODEL_NAMES",
     "SUMMARIZER_LLM",
     "PARSER_LLM",
@@ -81,9 +82,13 @@ FORECASTER_LLMS: list[GeneralLlm] = [
         extra_body={"verbosity": "high"},
         **EFFORT_MODEL_CONFIG,
     ),
-    # Restored after the donated OpenRouter route successfully served a direct
-    # Gemini 3.8 Flash probe. This is a base forecaster, independent of the
-    # optional Gemini grounded-search research provider.
+]
+
+# Test-only extension of the production ensemble. Gemini stays available for
+# the fixed-question Test Bot and the custom, non-publishing smoke test, but is
+# deliberately excluded from FutureEval and MiniBench competition forecasts.
+TEST_FORECASTER_LLMS: list[GeneralLlm] = [
+    *FORECASTER_LLMS,
     build_llm_with_openrouter_fallback(
         model="openrouter/google/gemini-3.8-flash",
         reasoning={"effort": "high"},
