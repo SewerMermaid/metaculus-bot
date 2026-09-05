@@ -1,5 +1,4 @@
 from pathlib import Path
-from types import SimpleNamespace
 
 from metaculus_bot import ensemble_smoke, llm_configs
 from metaculus_bot.aggregation_strategies import AggregationStrategy
@@ -35,17 +34,16 @@ def test_smoke_question_rejects_missing_required_input(monkeypatch) -> None:
         raise AssertionError("Expected missing question text to fail")
 
 
-def test_smoke_workflow_uses_funded_openrouter_key_for_gemini_research() -> None:
+def test_smoke_workflow_disables_gemini_research_but_routes_gemini_forecaster() -> None:
     workflow = Path(".github/workflows/smoke_test_next_ensemble.yaml").read_text(encoding="utf-8")
 
     assert "GOOGLE_API_KEY:" not in workflow
     assert "OPENROUTER_API_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}" in workflow
-    assert "GEMINI_SEARCH_ENABLED: 'true'" in workflow
-    assert "GEMINI_SEARCH_BACKEND: 'openrouter'" in workflow
-    assert "GEMINI_SEARCH_MODEL: 'gemini-3.8-flash'" in workflow
-    assert "GEMINI_SEARCH_FALLBACK_MODEL: 'gemini-3.7-flash'" in workflow
+    assert "GEMINI_SEARCH_ENABLED: 'false'" in workflow
+    assert "GEMINI_SEARCH_BACKEND:" not in workflow
+    assert "GEMINI_SEARCH_MODEL:" not in workflow
+    assert "GEMINI_SEARCH_FALLBACK_MODEL:" not in workflow
     assert "GEMINI_USE_DONATED_OPENROUTER_KEY: 'true'" in workflow
-    assert "NATIVE_SEARCH_REASONING_EFFORT: 'high'" in workflow
 
 
 def test_production_lineup_includes_gemini_38_flash() -> None:
@@ -58,40 +56,16 @@ def test_production_lineup_includes_gemini_38_flash() -> None:
     ]
 
 
-def test_smoke_lineup_uses_requested_models_at_high_effort(monkeypatch) -> None:
-    calls: list[dict] = []
-
-    def fake_builder(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace(model=kwargs["model"])
-
-    monkeypatch.setattr(llm_configs, "build_llm_with_openrouter_fallback", fake_builder)
-
-    llms = llm_configs.build_smoke_forecaster_llms()
-
-    assert [llm.model for llm in llms] == [
-        "openrouter/openai/gpt-5.6-terra",
-        "openrouter/openai/gpt-5.6-sol",
-        "openrouter/anthropic/claude-fable-5",
-        "openrouter/anthropic/claude-opus-5",
-    ]
-    assert all(call["reasoning"] == {"effort": "high"} for call in calls)
-    assert all(call["max_tokens"] == 64_000 for call in calls)
-    assert all("temperature" not in call and "top_p" not in call for call in calls)
-    assert calls[2]["extra_body"] == {"verbosity": "high"}
-    assert calls[3]["extra_body"] == {"verbosity": "high"}
-
-
 def test_smoke_forecaster_preserves_production_architecture_without_publishing(monkeypatch) -> None:
     captured: dict = {}
-    smoke_llms = [SimpleNamespace(model="smoke-model")]
+    smoke_llms = [object()]
     sentinel = object()
 
     def fake_forecaster(**kwargs):
         captured.update(kwargs)
         return sentinel
 
-    monkeypatch.setattr(ensemble_smoke, "build_smoke_forecaster_llms", lambda: smoke_llms)
+    monkeypatch.setattr(ensemble_smoke, "FORECASTER_LLMS", smoke_llms)
     monkeypatch.setattr(ensemble_smoke, "TemplateForecaster", fake_forecaster)
 
     result = ensemble_smoke.build_smoke_forecaster()
