@@ -1,10 +1,8 @@
-"""Gemini grounded search research provider.
+"""Gemini web-research provider.
 
-Uses the `google-genai` SDK directly (NOT via OpenRouter) so we get real
-first-party Google Search grounding rather than OpenRouter's Exa-backed web
-plugin. This adds a genuinely distinct search index to the ensemble — the
-Metaculus Fall 2025 writeup identified research breadth as the single
-strongest predictor of winning bots.
+The default backend uses the ``google-genai`` SDK directly for first-party
+Google Search grounding. A workflow can select the OpenRouter backend to use
+the same funded OpenRouter credential as the forecasting ensemble.
 
 Mirrors `_native_search_provider` in `research_providers.py` for consistency.
 """
@@ -20,6 +18,7 @@ from google import genai
 from google.genai import types as genai_types
 
 from metaculus_bot.constants import (
+    GEMINI_SEARCH_BACKEND_ENV,
     GEMINI_SEARCH_DEFAULT_MODEL,
     GEMINI_SEARCH_FALLBACK_MODEL_ENV,
     GEMINI_SEARCH_MODEL_ENV,
@@ -27,11 +26,16 @@ from metaculus_bot.constants import (
     GOOGLE_API_KEY_ENV,
 )
 from metaculus_bot.prompts import web_research_prompt
-from metaculus_bot.research.providers import ResearchCallable
+from metaculus_bot.research.providers import ResearchCallable, build_native_search_llm
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["build_gemini_client", "gemini_search_provider", "invoke_gemini_grounded"]
+__all__ = [
+    "build_gemini_client",
+    "gemini_search_provider",
+    "invoke_gemini_grounded",
+    "invoke_gemini_openrouter",
+]
 
 # Header-only initializer for the sources list. Checking `len(sources_lines) > _SOURCES_HEADER_LEN`
 # against this named constant keeps the sources-present gate tied to the init block.
@@ -75,6 +79,52 @@ def _resolve_fallback_model(primary_model: str) -> str | None:
     if not fallback_model or fallback_model == primary_model:
         return None
     return fallback_model
+
+
+def _as_openrouter_google_slug(model: str) -> str:
+    return model if "/" in model else f"google/{model}"
+
+
+async def _invoke_openrouter_model(prompt: str, model: str) -> str:
+    openrouter_slug = _as_openrouter_google_slug(model)
+    llm = build_native_search_llm(openrouter_slug)
+    logger.info("GeminiSearch(OpenRouter): calling %s with web search", llm.model)
+    try:
+        result = await asyncio.wait_for(llm.invoke(prompt), timeout=GEMINI_SEARCH_TIMEOUT)
+    except asyncio.TimeoutError:
+        logger.warning("GeminiSearch(OpenRouter): %s timed out after %ss", llm.model, GEMINI_SEARCH_TIMEOUT)
+        raise
+    logger.info("GeminiSearch(OpenRouter): got %s chars from %s", len(result), llm.model)
+    return result
+
+
+async def invoke_gemini_openrouter(prompt: str, *, model_slug: str | None = None) -> str:
+    """Invoke Gemini through OpenRouter, skipping it if primary and backup fail."""
+    primary_model = _resolve_model(model_slug)
+    fallback_model = _resolve_fallback_model(primary_model)
+    try:
+        return await _invoke_openrouter_model(prompt, primary_model)
+    except Exception as primary_error:
+        if fallback_model is None:
+            raise
+        logger.warning(
+            "GeminiSearch(OpenRouter): %s failed (%s: %s); retrying once with fallback %s",
+            primary_model,
+            type(primary_error).__name__,
+            primary_error,
+            fallback_model,
+        )
+        try:
+            return await _invoke_openrouter_model(prompt, fallback_model)
+        except Exception as fallback_error:
+            logger.warning(
+                "GeminiSearch(OpenRouter): fallback %s also failed (%s: %s); "
+                "skipping Gemini research for this question",
+                fallback_model,
+                type(fallback_error).__name__,
+                fallback_error,
+            )
+            return ""
 
 
 async def _generate_grounded_response(
@@ -236,18 +286,24 @@ def gemini_search_provider(
     model_slug: str | None = None,
     is_benchmarking: bool = False,
 ) -> ResearchCallable:
-    """Research provider using Gemini with Google Search grounding.
+    """Research provider using Gemini through Google or OpenRouter.
 
     Mirrors the `_native_search_provider` contract (`MetaculusQuestion -> str`).
     """
+
+    backend = os.getenv(GEMINI_SEARCH_BACKEND_ENV, "google").strip().lower()
+    if backend not in {"google", "openrouter"}:
+        raise ValueError(f"Unsupported {GEMINI_SEARCH_BACKEND_ENV} value: {backend!r}")
 
     async def _fetch(question: MetaculusQuestion) -> str:  # noqa: D401
         prompt = web_research_prompt(
             question.question_text,
             is_benchmarking=is_benchmarking,
-            citation_style="auto_annotated",
+            citation_style="markdown" if backend == "openrouter" else "auto_annotated",
             allow_resolution_source_reading=True,
         )
+        if backend == "openrouter":
+            return await invoke_gemini_openrouter(prompt, model_slug=model_slug)
         return await invoke_gemini_grounded(prompt, model_slug=model_slug)
 
     return _fetch
