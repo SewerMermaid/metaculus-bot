@@ -81,6 +81,12 @@ def _make_smoke_question() -> BinaryQuestion:
 async def run_smoke() -> float:
     bot = build_smoke_forecaster()
     models = [llm.model for llm in bot._forecaster_llms]
+    gemini_enabled = os.environ.get("GEMINI_SEARCH_ENABLED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     logger.info("Running non-publishing ensemble smoke test with models: %s", models)
 
     reports = await bot.forecast_questions([_make_smoke_question()], return_exceptions=True)
@@ -110,7 +116,11 @@ async def run_smoke() -> float:
             "",
             "- Publication: disabled",
             "- Question: custom binary question supplied for this workflow run",
-            "- Research: user-supplied background plus Gemini web research via OpenRouter",
+            (
+                "- Research: user-supplied background plus Gemini web research via OpenRouter"
+                if gemini_enabled
+                else "- Research: user-supplied background only (Gemini disabled)"
+            ),
             f"- Gemini research backend: {os.environ.get('GEMINI_SEARCH_BACKEND', 'google')}",
             f"- Gemini research model: {os.environ.get('GEMINI_SEARCH_MODEL', 'disabled')}",
             f"- Gemini fallback model: {os.environ.get('GEMINI_SEARCH_FALLBACK_MODEL', 'none')}",

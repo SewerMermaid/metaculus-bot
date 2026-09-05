@@ -35,12 +35,13 @@ def test_smoke_question_rejects_missing_required_input(monkeypatch) -> None:
         raise AssertionError("Expected missing question text to fail")
 
 
-def test_smoke_workflow_uses_funded_openrouter_key_for_gemini_research() -> None:
+def test_smoke_workflow_can_toggle_gemini_research_and_uses_funded_key() -> None:
     workflow = Path(".github/workflows/smoke_test_next_ensemble.yaml").read_text(encoding="utf-8")
 
     assert "GOOGLE_API_KEY:" not in workflow
     assert "OPENROUTER_API_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}" in workflow
-    assert "GEMINI_SEARCH_ENABLED: 'true'" in workflow
+    assert "include_gemini_research:" in workflow
+    assert "GEMINI_SEARCH_ENABLED: ${{ inputs.include_gemini_research }}" in workflow
     assert "GEMINI_SEARCH_BACKEND: 'openrouter'" in workflow
     assert "GEMINI_SEARCH_MODEL: 'gemini-3.8-flash'" in workflow
     assert "GEMINI_SEARCH_FALLBACK_MODEL: 'gemini-3.7-flash'" in workflow

@@ -8,6 +8,11 @@ on:
         required: true
         default: false
         type: boolean
+      include_gemini_research:
+        description: Include Gemini web research before the four-model forecast
+        required: true
+        default: true
+        type: boolean
       question_text:
         description: Binary forecasting question
         required: true
@@ -92,7 +97,7 @@ jobs:
         env:
           OAI_ANTH_OPENROUTER_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OAI_ANTH_OPENROUTER_KEY }}
-          GEMINI_SEARCH_ENABLED: 'true'
+          GEMINI_SEARCH_ENABLED: ${{ inputs.include_gemini_research }}
           GEMINI_SEARCH_BACKEND: 'openrouter'
           GEMINI_SEARCH_MODEL: 'gemini-3.8-flash'
           GEMINI_SEARCH_FALLBACK_MODEL: 'gemini-3.7-flash'
