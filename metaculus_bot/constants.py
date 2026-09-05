@@ -299,7 +299,7 @@ GEMINI_SEARCH_FALLBACK_MODEL_ENV: str = "GEMINI_SEARCH_FALLBACK_MODEL"
 # no donated/shared-key path because Google AI Studio doesn't offer one.
 GOOGLE_API_KEY_ENV: str = "GOOGLE_API_KEY"
 # Toggle for OpenRouter Gemini routing only. Controls whether models like
-# ``openrouter/google/gemini-3.1-pro-preview`` flow through the Metaculus-
+# ``openrouter/google/gemini-3.8-flash`` flow through the Metaculus-
 # donated OpenRouter key (``OAI_ANTH_OPENROUTER_KEY``) with paid-key fallback,
 # or skip the donated wrapper entirely and route through the operator's
 # personal ``OPENROUTER_API_KEY``. Does NOT affect the google-genai grounded

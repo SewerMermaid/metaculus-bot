@@ -91,11 +91,8 @@ jobs:
           # donated/shared path — Google AI Studio doesn't offer one.
           GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_SEARCH_ENABLED: 'true'
-          # OpenRouter Gemini routing (forecaster, stacker, summarizer when the
-          # ensemble includes a Google model). When 'false' (default), Gemini
-          # OpenRouter calls flow through OPENROUTER_API_KEY only — bypassing
-          # the Metaculus-donated OAI_ANTH_OPENROUTER_KEY wrapper. Off because
-          # the donated-key Google route has been flaky.
+          # Route the Gemini 3.8 Flash base forecaster through the donated
+          # OpenRouter key first, with personal-key fallback on key-scoped errors.
           GEMINI_USE_DONATED_OPENROUTER_KEY: 'true'
           # Second-pass gap-fill: analyzer identifies gaps in first-pass research,
           # parallel grounded Gemini searches resolve each. Fails soft.
