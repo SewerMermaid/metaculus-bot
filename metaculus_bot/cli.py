@@ -24,6 +24,7 @@ from metaculus_bot.fallback_openrouter import (
 from metaculus_bot.fetch_hardening import apply_fetch_hardening
 from metaculus_bot.forecaster import TemplateForecaster
 from metaculus_bot.llm_configs import (
+    CUP_FORECASTER_LLMS,
     DISAGREEMENT_ANALYZER_LLM,
     FORECASTER_LLMS,
     PARSER_LLM,
@@ -82,6 +83,11 @@ def main() -> None:
     args = parser.parse_args()
     run_mode: Literal["tournament", "minibench", "quarterly_cup", "metaculus_cup", "test_questions"] = args.mode
 
+    # FutureEval/tournament, MiniBench, and manual production tests use the
+    # current frontier ensemble. Preserve the unrelated Cup workflow's prior
+    # lineup until it is explicitly migrated.
+    forecaster_llms = CUP_FORECASTER_LLMS if run_mode in ("quarterly_cup", "metaculus_cup") else FORECASTER_LLMS
+
     # Wire research persistence if enabled (production GHA runs set this env var)
     research_writer = None
     research_sink = None
@@ -104,7 +110,7 @@ def main() -> None:
         aggregation_strategy=AggregationStrategy.CONDITIONAL_STACKING,
         research_sink=research_sink,
         llms={
-            "forecasters": FORECASTER_LLMS,
+            "forecasters": forecaster_llms,
             "stacker": STACKER_LLM,
             "analyzer": DISAGREEMENT_ANALYZER_LLM,
             "summarizer": SUMMARIZER_LLM,

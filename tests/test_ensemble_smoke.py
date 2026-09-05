@@ -48,6 +48,23 @@ def test_smoke_workflow_disables_gemini_research_but_routes_gemini_forecaster() 
 
 def test_production_lineup_includes_gemini_38_flash() -> None:
     assert [llm.model for llm in llm_configs.FORECASTER_LLMS] == [
+        "openrouter/openai/gpt-5.6-terra",
+        "openrouter/openai/gpt-5.6-sol",
+        "openrouter/anthropic/claude-fable-5.1",
+        "openrouter/anthropic/claude-opus-5",
+        "openrouter/google/gemini-3.8-flash",
+    ]
+    assert [llm.litellm_kwargs["reasoning"] for llm in llm_configs.FORECASTER_LLMS] == [
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+    ]
+
+
+def test_metaculus_cup_retains_previous_lineup() -> None:
+    assert [llm.model for llm in llm_configs.CUP_FORECASTER_LLMS] == [
         "openrouter/openai/gpt-5.4",
         "openrouter/openai/gpt-5.5",
         "openrouter/anthropic/claude-opus-4.8",
