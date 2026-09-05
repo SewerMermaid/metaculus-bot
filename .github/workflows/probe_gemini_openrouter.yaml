@@ -21,6 +21,7 @@ on:
           - openai/gpt-5.6-terra
           - google/gemini-3.8-flash
           - google/gemini-3.7-flash
+          - gemini-byok-audit
 
 permissions:
   contents: read
@@ -46,6 +47,7 @@ jobs:
           import urllib.request
 
           CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
+          USER_MODELS_URL = "https://openrouter.ai/api/v1/models/user"
           MODEL_SPECS = (
               ("anthropic/claude-fable-5.1", "high"),
               ("anthropic/claude-opus-5", "high"),
@@ -63,11 +65,44 @@ jobs:
               return text.replace(api_key, "[REDACTED]").replace("`", "'")
 
 
-          def probe(model: str, effort: str | None, api_key: str) -> tuple[bool, list[str]]:
+          def discover_gemini_models(api_key: str) -> tuple[tuple[str, None], ...]:
+              request = urllib.request.Request(
+                  USER_MODELS_URL,
+                  headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  payload = json.load(response)
+
+              model_ids: list[str] = []
+              for model in payload.get("data", []):
+                  model_id = model.get("id", "")
+                  if not model_id.startswith("google/gemini-"):
+                      continue
+                  output_modalities = (model.get("architecture") or {}).get("output_modalities") or []
+                  if output_modalities and "text" not in output_modalities:
+                      continue
+                  model_ids.append(model_id)
+              return tuple((model_id, None) for model_id in sorted(set(model_ids)))
+
+
+          def routing_metadata(payload: dict) -> tuple[object, object]:
+              router = payload.get("openrouter_metadata") or {}
+              error_metadata = (payload.get("error") or {}).get("metadata") or {}
+              is_byok = router.get("is_byok", error_metadata.get("is_byok", "unknown"))
+              provider = router.get("summary", error_metadata.get("provider_name", "unknown"))
+              return is_byok, provider
+
+
+          def probe(
+              model: str,
+              effort: str | None,
+              api_key: str,
+              max_tokens: int = MAX_TOKENS,
+          ) -> tuple[bool, bool, list[str]]:
               payload = {
                   "model": model,
                   "messages": [{"role": "user", "content": PROMPT}],
-                  "max_tokens": MAX_TOKENS,
+                  "max_tokens": max_tokens,
               }
               if effort:
                   payload["reasoning"] = {"effort": effort, "exclude": True}
@@ -78,6 +113,7 @@ jobs:
                       "Authorization": f"Bearer {api_key}",
                       "Content-Type": "application/json",
                       "Accept": "application/json",
+                      "X-OpenRouter-Metadata": "enabled",
                   },
                   method="POST",
               )
@@ -92,21 +128,26 @@ jobs:
                       parsed = json.loads(body)
                       detail = parsed.get("error", {}).get("message", body)
                   except json.JSONDecodeError:
+                      parsed = {}
                       detail = body
-                  return False, [
+                  is_byok, provider = routing_metadata(parsed)
+                  return False, is_byok in {True, False}, [
                       f"## `{model}`",
                       "",
                       f"- Reasoning effort: {effort or 'model default'}",
                       f"- Result: failed (HTTP {exc.code})",
+                      f"- BYOK: {is_byok}",
+                      f"- Provider routing: `{safe_text(provider, api_key)}`",
                       f"- Error: `{safe_text(detail, api_key)}`",
                       "",
                   ]
               except urllib.error.URLError as exc:
-                  return False, [
+                  return False, False, [
                       f"## `{model}`",
                       "",
                       f"- Reasoning effort: {effort or 'model default'}",
                       "- Result: failed (request error)",
+                      "- BYOK: unknown",
                       f"- Error: `{safe_text(exc.reason, api_key)}`",
                       "",
                   ]
@@ -116,11 +157,14 @@ jobs:
               content = message.get("content", "")
               usage = result.get("usage", {})
               completion_details = usage.get("completion_tokens_details", {}) or {}
+              is_byok, provider = routing_metadata(result)
               lines = [
                   f"## `{model}`",
                   "",
                   f"- Reasoning effort: {effort or 'model default'}",
                   f"- Result: success (HTTP {status})",
+                  f"- BYOK: {is_byok}",
+                  f"- Provider routing: `{safe_text(provider, api_key)}`",
                   f"- Resolved model: `{safe_text(result.get('model', 'n/a'), api_key)}`",
                   f"- Response: `{safe_text(content, api_key)}`",
                   f"- Prompt tokens: {usage.get('prompt_tokens', 'n/a')}",
@@ -130,7 +174,7 @@ jobs:
                   f"- Cost: {usage.get('cost', 'n/a')}",
                   "",
               ]
-              return True, lines
+              return True, is_byok in {True, False}, lines
 
 
           api_key = os.environ.get("OPENROUTER_KEY", "")
@@ -138,9 +182,13 @@ jobs:
               raise SystemExit("OAI_ANTH_OPENROUTER_KEY is not configured")
 
           target = os.environ.get("TARGET_MODEL", "all")
-          selected_specs = (
-              MODEL_SPECS if target == "all" else tuple(spec for spec in MODEL_SPECS if spec[0] == target)
-          )
+          audit_mode = target == "gemini-byok-audit"
+          if audit_mode:
+              selected_specs = discover_gemini_models(api_key)
+          else:
+              selected_specs = (
+                  MODEL_SPECS if target == "all" else tuple(spec for spec in MODEL_SPECS if spec[0] == target)
+              )
           if not selected_specs:
               raise SystemExit(f"Unsupported target model: {target}")
 
@@ -148,20 +196,27 @@ jobs:
               "# Selected-model donated-key smoke test",
               "",
               f"Prompt: `{PROMPT}`",
-              f"Output cap: {MAX_TOKENS} tokens per model",
+              f"Output cap: {16 if audit_mode else MAX_TOKENS} tokens per model",
               "",
           ]
           failed = False
+          routing_unknown = False
           for model, effort in selected_specs:
-              succeeded, lines = probe(model, effort, api_key)
+              succeeded, routing_known, lines = probe(
+                  model,
+                  effort,
+                  api_key,
+                  max_tokens=16 if audit_mode else MAX_TOKENS,
+              )
               summary_lines.extend(lines)
-              failed = failed or not succeeded
+              failed = failed or (not succeeded and not audit_mode)
+              routing_unknown = routing_unknown or not routing_known
 
           summary = "\n".join(summary_lines)
           print(summary)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary_file:
               summary_file.write(summary + "\n")
 
-          if failed:
+          if failed or routing_unknown:
               sys.exit(1)
           PY
