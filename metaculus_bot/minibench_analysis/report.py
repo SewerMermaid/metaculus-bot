@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _TYPE_LABEL = {"binary": "binary", "multiple_choice": "mc", "numeric": "numeric"}
 
 
-def _type_cells(prefix: str, ts: TypeSummary, *, include_tier2: bool) -> dict[str, Any]:
+def _type_cells(prefix: str, ts: TypeSummary, *, include_tier2: bool, include_brier: bool = False) -> dict[str, Any]:
     cells = {
         f"{prefix}_scored": ts.scorable,
         f"{prefix}_beatchance_n": ts.beat_chance_hits,
@@ -28,6 +28,9 @@ def _type_cells(prefix: str, ts: TypeSummary, *, include_tier2: bool) -> dict[st
     if include_tier2:
         cells[f"{prefix}_tier2_n"] = ts.tier2_hits
         cells[f"{prefix}_tier2_pct"] = ts.tier2_pct
+    if include_brier:
+        cells[f"{prefix}_brier_n"] = len(ts.brier_scores)
+        cells[f"{prefix}_brier_mean"] = ts.mean_brier_score
     return cells
 
 
@@ -75,7 +78,14 @@ def my_bot_accuracy_records(summary: BotSummary, *, label: str | None = None) ->
     if label is not None:
         row["minibench"] = label
     for t in QUESTION_TYPES:
-        row.update(_type_cells(_TYPE_LABEL[t], summary.by_type[t], include_tier2=True))
+        row.update(
+            _type_cells(
+                _TYPE_LABEL[t],
+                summary.by_type[t],
+                include_tier2=True,
+                include_brier=t == "binary",
+            )
+        )
         row[f"{_TYPE_LABEL[t]}_peer_avg"] = summary.by_type[t].avg_peer_score
     row.update(_type_cells("overall", summary.overall, include_tier2=True))
     row["overall_peer_avg"] = summary.overall.avg_peer_score
@@ -138,8 +148,10 @@ def render_my_bot_markdown(answered: dict[str, Any], accuracy: dict[str, Any], l
         f"(binary {answered.get('binary_answered', 0)}, mc {answered.get('mc_answered', 0)}, "
         f"numeric {answered.get('numeric_answered', 0)}).",
         "",
-        "| Type | Beat-chance | Tier-2 (directional/argmax/IQR) | Avg peer |",
-        "|---|---|---|---|",
+        "Binary Brier is a proper accuracy score: lower is better, 0 is perfect, and 1 is worst.",
+        "",
+        "| Type | Beat-chance | Tier-2 (directional/argmax/IQR) | Mean Brier | Avg peer |",
+        "|---|---|---|---|---|",
     ]
     for t in ("binary", "mc", "numeric", "overall"):
         bc = f"{accuracy.get(f'{t}_beatchance_n')}/{accuracy.get(f'{t}_scored')} ({_fmt_pct(accuracy.get(f'{t}_beatchance_pct'))})"
@@ -148,5 +160,7 @@ def render_my_bot_markdown(answered: dict[str, Any], accuracy: dict[str, Any], l
         )
         peer = accuracy.get(f"{t}_peer_avg")
         peer_s = "n/a" if peer is None else f"{peer:.1f}"
-        lines.append(f"| {t} | {bc} | {t2} | {peer_s} |")
+        brier = accuracy.get("binary_brier_mean") if t == "binary" else None
+        brier_s = "n/a" if brier is None else f"{brier:.4f}"
+        lines.append(f"| {t} | {bc} | {t2} | {brier_s} | {peer_s} |")
     return "\n".join(lines)
