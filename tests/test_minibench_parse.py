@@ -110,6 +110,15 @@ class TestVerdicts:
         assert v.beat_chance is None
         assert v.tier2_correct is None
 
+    def test_null_latest_is_not_answered(self):
+        q = _binary_q("yes", forecasted=False)
+        q["my_forecasts"] = {"latest": None}
+        v = verdict_from_question(q, is_my_bot=True)
+        assert v.answered is False
+        assert v.peer_score is None
+        assert v.beat_chance is None
+        assert v.tier2_correct is None
+
     def test_non_scorable_resolution(self):
         v = verdict_from_question(_binary_q("annulled", 0.8), is_my_bot=True)
         assert v.answered is True

@@ -78,10 +78,10 @@ def parse_resolution(qjson: dict[str, Any], bucket: str) -> tuple[bool, Any]:
 
 def _latest_forecast_values(qjson: dict[str, Any]) -> list[float] | None:
     """The authenticated bot's most recent forecast_values for this question."""
-    try:
-        values = qjson["my_forecasts"]["latest"]["forecast_values"]
-    except (KeyError, TypeError):
+    latest = _latest_forecast(qjson)
+    if latest is None:
         return None
+    values = latest.get("forecast_values")
     return list(values) if values else None
 
 
@@ -101,14 +101,30 @@ def _numeric_cdf(qjson: dict[str, Any], forecast_values: list[float]) -> Numeric
 
 def _peer_score(qjson: dict[str, Any]) -> float | None:
     """Best-effort per-question peer score for the authenticated bot, if present."""
-    try:
-        scores = qjson["my_forecasts"]["latest"].get("score_data") or {}
-    except (KeyError, TypeError):
+    latest = _latest_forecast(qjson)
+    if latest is None:
+        return None
+    scores = latest.get("score_data") or {}
+    if not isinstance(scores, dict):
         return None
     for key in ("peer_score", "spot_peer_score"):
         if isinstance(scores.get(key), (int, float)):
             return float(scores[key])
     return None
+
+
+def _latest_forecast(qjson: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the latest forecast object when Metaculus supplied one.
+
+    The API represents an unanswered question as ``my_forecasts.latest = null``.
+    Report generation must treat that as ordinary missing data, not as a malformed
+    response that aborts the entire tournament.
+    """
+    my_forecasts = qjson.get("my_forecasts")
+    if not isinstance(my_forecasts, dict):
+        return None
+    latest = my_forecasts.get("latest")
+    return latest if isinstance(latest, dict) else None
 
 
 def verdict_from_question(
