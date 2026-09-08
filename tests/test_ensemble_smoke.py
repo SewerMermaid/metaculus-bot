@@ -75,6 +75,35 @@ def test_production_lineup_excludes_gemini() -> None:
     ]
 
 
+def test_minibench_astra_variant_only_replaces_terra() -> None:
+    assert [llm.model for llm in llm_configs.MINIBENCH_ASTRA_FORECASTER_LLMS] == [
+        "openrouter/openai/gpt-6-astra",
+        "openrouter/openai/gpt-5.6-sol",
+        "openrouter/anthropic/claude-fable-5.1",
+        "openrouter/anthropic/claude-opus-5",
+    ]
+    assert [llm.litellm_kwargs["reasoning"] for llm in llm_configs.MINIBENCH_ASTRA_FORECASTER_LLMS] == [
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+        {"effort": "high"},
+    ]
+
+
+def test_minibench_astra_workflow_is_scheduled_and_uses_dedicated_mode() -> None:
+    workflow = Path(".github/workflows/run_bot_on_minibench_astra.yaml").read_text(encoding="utf-8")
+
+    assert "workflow_dispatch:" in workflow
+    assert "schedule:" in workflow
+    assert 'cron: "18 * * * *"' in workflow
+    assert 'cron: "48 * * * *"' in workflow
+    assert "python main.py --mode minibench_astra" in workflow
+    assert "METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN_TEST }}" in workflow
+    assert "METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }}" not in workflow
+    assert "GEMINI_SEARCH_ENABLED: 'false'" in workflow
+    assert "GAP_FILL_ENABLED: 'false'" in workflow
+
+
 def test_test_lineup_adds_gemini_38_flash() -> None:
     assert [llm.model for llm in llm_configs.TEST_FORECASTER_LLMS] == [
         "openrouter/openai/gpt-5.6-terra",

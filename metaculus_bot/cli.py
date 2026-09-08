@@ -27,6 +27,7 @@ from metaculus_bot.llm_configs import (
     CUP_FORECASTER_LLMS,
     DISAGREEMENT_ANALYZER_LLM,
     FORECASTER_LLMS,
+    MINIBENCH_ASTRA_FORECASTER_LLMS,
     PARSER_LLM,
     RESEARCHER_LLM,
     STACKER_LLM,
@@ -77,12 +78,21 @@ def main() -> None:
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["tournament", "minibench", "quarterly_cup", "metaculus_cup", "test_questions"],
+        choices=[
+            "tournament",
+            "minibench",
+            "minibench_astra",
+            "quarterly_cup",
+            "metaculus_cup",
+            "test_questions",
+        ],
         default="tournament",
         help="Specify the run mode (default: tournament)",
     )
     args = parser.parse_args()
-    run_mode: Literal["tournament", "minibench", "quarterly_cup", "metaculus_cup", "test_questions"] = args.mode
+    run_mode: Literal[
+        "tournament", "minibench", "minibench_astra", "quarterly_cup", "metaculus_cup", "test_questions"
+    ] = args.mode
 
     # FutureEval/tournament and MiniBench use the four-model competition
     # ensemble. Test mode adds Gemini; the unrelated Cup workflow retains its
@@ -91,6 +101,8 @@ def main() -> None:
         forecaster_llms = CUP_FORECASTER_LLMS
     elif run_mode == "test_questions":
         forecaster_llms = TEST_FORECASTER_LLMS
+    elif run_mode == "minibench_astra":
+        forecaster_llms = MINIBENCH_ASTRA_FORECASTER_LLMS
     else:
         forecaster_llms = FORECASTER_LLMS
 
@@ -129,7 +141,7 @@ def main() -> None:
         check_tournament_dates(logging.getLogger(__name__))  # Warn/error if tournament dates are stale
         template_bot.skip_previously_forecasted_questions = True  # to not risk explosive spend, we won't update preds
         forecast_reports = asyncio.run(template_bot.forecast_on_tournament(TOURNAMENT_ID, return_exceptions=True))
-    elif run_mode == "minibench":
+    elif run_mode in ("minibench", "minibench_astra"):
         template_bot.skip_previously_forecasted_questions = True  # to not risk explosive spend, we won't update preds
         forecast_reports = asyncio.run(
             template_bot.forecast_on_tournament(MetaculusApi.CURRENT_MINIBENCH_ID, return_exceptions=True)
