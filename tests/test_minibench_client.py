@@ -1,7 +1,9 @@
 """Unit tests for MetaculusClient construction (no network)."""
 
 import pytest
+import requests
 
+from metaculus_bot.minibench_analysis import client as client_module
 from metaculus_bot.minibench_analysis.client import MetaculusClient
 
 
@@ -113,3 +115,31 @@ def test_get_leaderboard_uses_project_leaderboard_endpoint_and_nested_entries():
 
 def test_get_leaderboard_returns_empty_when_no_entries():
     assert _client(lambda path, params=None: [{"id": 7, "entries": []}]).get_leaderboard(33074) == []
+
+
+def test_get_retries_http_429_and_honors_retry_after(monkeypatch):
+    class _Response:
+        def __init__(self, status_code, payload, headers=None):
+            self.status_code = status_code
+            self.payload = payload
+            self.headers = headers or {}
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.HTTPError(response=self)
+
+        def json(self):
+            return self.payload
+
+    responses = [
+        _Response(429, {}, {"Retry-After": "2"}),
+        _Response(200, {"results": [{"id": 1}]}),
+    ]
+    sleeps = []
+    monkeypatch.setattr(client_module.requests, "get", lambda *args, **kwargs: responses.pop(0))
+    monkeypatch.setattr(client_module.time, "sleep", sleeps.append)
+
+    got = MetaculusClient(token="t", pace_seconds=0)._get("/posts/")
+
+    assert got == {"results": [{"id": 1}]}
+    assert sleeps == [0, 2.0, 0]
