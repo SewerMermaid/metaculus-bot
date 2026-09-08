@@ -11,6 +11,7 @@ from metaculus_bot.fallback_openrouter import build_llm_with_openrouter_fallback
 __all__ = [
     "CUP_FORECASTER_LLMS",
     "FORECASTER_LLMS",
+    "MINIBENCH_ASTRA_FORECASTER_LLMS",
     "TEST_FORECASTER_LLMS",
     "FORECASTER_MODEL_NAMES",
     "SUMMARIZER_LLM",
@@ -82,6 +83,18 @@ FORECASTER_LLMS: list[GeneralLlm] = [
         extra_body={"verbosity": "high"},
         **EFFORT_MODEL_CONFIG,
     ),
+]
+
+# Manual MiniBench A/B variant. It deliberately shares the other three model
+# objects with the production lineup so the only experimental variable is the
+# first OpenAI slot: GPT-6 Astra replaces GPT-5.6 Terra at the same effort.
+MINIBENCH_ASTRA_FORECASTER_LLMS: list[GeneralLlm] = [
+    build_llm_with_openrouter_fallback(
+        model="openrouter/openai/gpt-6-astra",
+        reasoning={"effort": "high"},
+        **EFFORT_MODEL_CONFIG,
+    ),
+    *FORECASTER_LLMS[1:],
 ]
 
 # Test-only extension of the production ensemble. Gemini stays available for
