@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 _BASE = "https://www.metaculus.com/api"
 _PAGE = 100  # Metaculus caps the posts API at 100 per request.
+_MAX_RATE_LIMIT_ATTEMPTS = 4
 # Slug of the current MiniBench tournament (matches forecasting_tools'
 # MetaculusApi.CURRENT_MINIBENCH_ID); used as a fallback when the tournament
 # listing surfaces nothing.
@@ -46,15 +47,30 @@ class MetaculusClient:
 
     def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | list[dict[str, Any]] | None:
         url = f"{_BASE}{path}"
-        try:
-            time.sleep(self._pace)
-            resp = requests.get(url, params=params, headers=self._headers, timeout=30)
-            resp.raise_for_status()
-            return resp.json()
-        except requests.HTTPError:
-            logger.warning("GET %s -> HTTP %s", url, getattr(resp, "status_code", "?"))
-        except requests.RequestException as exc:
-            logger.warning("GET %s failed: %s", url, type(exc).__name__)
+        for attempt in range(1, _MAX_RATE_LIMIT_ATTEMPTS + 1):
+            try:
+                time.sleep(self._pace)
+                resp = requests.get(url, params=params, headers=self._headers, timeout=30)
+                resp.raise_for_status()
+                return resp.json()
+            except requests.HTTPError:
+                status = getattr(resp, "status_code", None)
+                if status == 429 and attempt < _MAX_RATE_LIMIT_ATTEMPTS:
+                    retry_after = _retry_after_seconds(resp, attempt)
+                    logger.warning(
+                        "GET %s -> HTTP 429; retrying in %.1fs (attempt %d/%d)",
+                        url,
+                        retry_after,
+                        attempt + 1,
+                        _MAX_RATE_LIMIT_ATTEMPTS,
+                    )
+                    time.sleep(retry_after)
+                    continue
+                logger.warning("GET %s -> HTTP %s", url, status or "?")
+                return None
+            except requests.RequestException as exc:
+                logger.warning("GET %s failed: %s", url, type(exc).__name__)
+                return None
         return None
 
     # -- identity -----------------------------------------------------------
@@ -183,6 +199,17 @@ def _results(page: dict[str, Any] | list | None) -> list[dict[str, Any]]:
         return []
     results = page.get("results")
     return results if isinstance(results, list) else []
+
+
+def _retry_after_seconds(response: requests.Response, attempt: int) -> float:
+    """Honor numeric Retry-After when supplied, otherwise use bounded backoff."""
+    raw = response.headers.get("Retry-After")
+    if raw is not None:
+        try:
+            return min(max(float(raw), 1.0), 60.0)
+        except ValueError:
+            pass
+    return min(10.0 * (2 ** (attempt - 1)), 60.0)
 
 
 def _tournament_sort_key(proj: dict[str, Any]) -> str:
