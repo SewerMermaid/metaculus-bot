@@ -18,9 +18,11 @@ class QuestionVerdict:
 
     ``beat_chance`` is the Tier-1 verdict (all bots). ``tier2_correct`` is the
     intuitive-breakdown verdict (my bot only; None for other bots or when not
-    applicable). ``peer_score`` is Metaculus's per-question peer score when the
-    API exposed it, else None. ``scorable`` is False for annulled/ambiguous/
-    out-of-bounds resolutions, which are excluded from every denominator.
+    applicable). ``brier_score`` is the proper score for resolved binary
+    forecasts (lower is better), and is None for MC/numeric questions.
+    ``peer_score`` is Metaculus's per-question peer score when the API exposed
+    it, else None. ``scorable`` is False for annulled/ambiguous/out-of-bounds
+    resolutions, which are excluded from every denominator.
     """
 
     question_id: int
@@ -29,6 +31,7 @@ class QuestionVerdict:
     scorable: bool
     beat_chance: bool | None = None
     tier2_correct: bool | None = None
+    brier_score: float | None = None
     peer_score: float | None = None
 
 
@@ -39,6 +42,7 @@ class TypeSummary:
     beat_chance_hits: int = 0
     tier2_applicable: int = 0
     tier2_hits: int = 0
+    brier_scores: list[float] = field(default_factory=list)
     peer_scores: list[float] = field(default_factory=list)
 
     @property
@@ -52,6 +56,10 @@ class TypeSummary:
     @property
     def avg_peer_score(self) -> float | None:
         return sum(self.peer_scores) / len(self.peer_scores) if self.peer_scores else None
+
+    @property
+    def mean_brier_score(self) -> float | None:
+        return sum(self.brier_scores) / len(self.brier_scores) if self.brier_scores else None
 
 
 @dataclass
@@ -77,6 +85,8 @@ class BotSummary:
                 b.tier2_applicable += 1
                 if v.tier2_correct:
                     b.tier2_hits += 1
+            if v.brier_score is not None:
+                b.brier_scores.append(v.brier_score)
             if v.peer_score is not None:
                 b.peer_scores.append(v.peer_score)
 

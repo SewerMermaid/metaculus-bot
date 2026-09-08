@@ -1,9 +1,9 @@
 name: MiniBench my-bot history
 
 # Walks every resolved MiniBench EXCEPT the current one and, for our own bot,
-# reports how many questions it answered plus its accuracy (Tier-1 beat-chance
-# and Tier-2 directional/argmax/IQR) per type, one row per MiniBench. Produces
-# CSV + XLSX artifacts.
+# reports how many questions it answered, binary Brier score, official
+# leaderboard row, and proxy accuracy (Tier-1 beat-chance and Tier-2
+# directional/argmax/IQR), one row per MiniBench. Produces CSV + XLSX artifacts.
 
 on:
   workflow_dispatch:

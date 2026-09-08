@@ -19,6 +19,7 @@ from metaculus_bot.minibench_analysis.scoring import (
     directional_binary,
     within_iqr_numeric,
 )
+from metaculus_bot.scoring_common import brier_score
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +159,7 @@ def verdict_from_question(
         if bucket == "binary":
             p_yes = float(values[-1])  # [p_no, p_yes] or [p_yes]; last element is P(yes)
             verdict.beat_chance = beat_chance_binary(p_yes, resolved)
+            verdict.brier_score = brier_score(p_yes, resolved)
             if is_my_bot:
                 verdict.tier2_correct = directional_binary(p_yes, resolved)
         elif bucket == "multiple_choice":
@@ -252,6 +254,10 @@ def my_bot_question_detail(
             "answered": verdict.answered,
             "scorable": verdict.scorable,
             "tier2_correct": verdict.tier2_correct,
+            # Proper binary scoring rule: 0 is perfect, 1 is worst. MC and
+            # numeric questions intentionally remain blank because their
+            # established scores in this project are not Brier scores.
+            "brier_score": verdict.brier_score,
             "peer_score": verdict.peer_score,
         }
     )

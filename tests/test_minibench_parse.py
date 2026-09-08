@@ -1,5 +1,7 @@
 """Tests for parsing raw Metaculus JSON into verdicts."""
 
+import pytest
+
 from metaculus_bot.minibench_analysis.parse import (
     build_question_url,
     format_my_prediction,
@@ -82,11 +84,13 @@ class TestVerdicts:
         assert v.answered and v.scorable
         assert v.beat_chance is True
         assert v.tier2_correct is True  # directional
+        assert v.brier_score == pytest.approx(0.04)
 
     def test_binary_miss(self):
         v = verdict_from_question(_binary_q("no", 0.8), is_my_bot=True)
         assert v.beat_chance is False
         assert v.tier2_correct is False
+        assert v.brier_score == pytest.approx(0.64)
 
     def test_mc_argmax_vs_beat_chance(self):
         # Resolved "B" (index 1) got 0.5 -> argmax hit and beats 1/3.
@@ -103,6 +107,7 @@ class TestVerdicts:
         v = verdict_from_question(_numeric_q("50"), is_my_bot=True)
         assert v.tier2_correct is True
         assert v.beat_chance is False
+        assert v.brier_score is None
 
     def test_not_answered(self):
         v = verdict_from_question(_binary_q("yes", forecasted=False), is_my_bot=True)
@@ -178,6 +183,7 @@ class TestQuestionDetail:
         assert row["accurate"] == "yes"
         assert row["beat_chance"] == "yes"
         assert row["tier2_correct"] is True
+        assert row["brier_score"] == pytest.approx(0.01)
 
     def test_question_detail_accurate_tristate(self):
         # Not answered -> accurate is n/a.

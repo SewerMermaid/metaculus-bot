@@ -147,7 +147,7 @@ def run_two_sessions_ago(client: MetaculusClient, output_dir: str, *, offset: in
     )
 
 
-def run_all_except_current(client: MetaculusClient, output_dir: str) -> str:
+def run_all_except_current(client: MetaculusClient, output_dir: str, *, me: dict | None = None) -> str:
     tournaments = client.list_minibench_tournaments()
     if not tournaments:
         return "No MiniBench tournaments found via the API; nothing to analyze. (See the client log for the raw tournament listing.)"
@@ -166,10 +166,12 @@ def run_all_except_current(client: MetaculusClient, output_dir: str) -> str:
     else:
         past = tournaments[:-1]  # drop the current (latest) one
     scope = "current included" if note else "current excluded"
-    return _write_history(client, output_dir, past, note=note, scope=scope)
+    return _write_history(client, output_dir, past, note=note, scope=scope, me=me)
 
 
-def run_explicit_tournaments(client: MetaculusClient, output_dir: str, ids: list[str]) -> str:
+def run_explicit_tournaments(
+    client: MetaculusClient, output_dir: str, ids: list[str], *, me: dict | None = None
+) -> str:
     """Analyze my bot across an explicit list of tournament ids/slugs.
 
     Used when MiniBench's past sessions can't be auto-discovered (the tournaments
@@ -184,26 +186,67 @@ def run_explicit_tournaments(client: MetaculusClient, output_dir: str, ids: list
         else:
             logger.warning("Tournament %r not found via API; using it as a bare id/label.", raw)
             tournaments.append({"id": raw, "slug": raw, "name": raw})
-    return _write_history(client, output_dir, tournaments, note="", scope="explicit list")
+    return _write_history(client, output_dir, tournaments, note="", scope="explicit list", me=me)
 
 
-def _write_history(client: MetaculusClient, output_dir: str, tournaments: list[dict], *, note: str, scope: str) -> str:
+def _my_leaderboard_record(client: MetaculusClient, tournament_id: int | str, label: str, me: dict | None) -> dict:
+    """Return this account's official leaderboard row for one tournament."""
+    entries = client.get_leaderboard(tournament_id)
+    my_id = me.get("id") if me else None
+    my_name = str(me.get("username") or "").casefold() if me else ""
+    mine = None
+    for entry in entries:
+        entry_id = entry.get("user_id")
+        same_id = my_id is not None and entry_id is not None and str(entry_id) == str(my_id)
+        same_name = my_name and str(entry.get("username") or "").casefold() == my_name
+        if same_id or same_name:
+            mine = entry
+            break
+    return {
+        "minibench": label,
+        "bot": (me or {}).get("username"),
+        "rank": mine.get("rank") if mine else None,
+        "leaderboard_score": mine.get("score") if mine else None,
+        "take": mine.get("take") if mine else None,
+        "peer_score": mine.get("peer_score") if mine else None,
+        "leaderboard_entries_returned": len(entries),
+    }
+
+
+def _write_history(
+    client: MetaculusClient,
+    output_dir: str,
+    tournaments: list[dict],
+    *,
+    note: str,
+    scope: str,
+    me: dict | None = None,
+) -> str:
     answered_rows: list[dict] = []
     accuracy_rows: list[dict] = []
+    ranking_rows: list[dict] = []
     question_rows: list[dict] = []
     for t in tournaments:
         label = t.get("name") or t.get("slug") or str(t.get("id"))
-        posts = client.get_resolved_posts(t.get("id") or t.get("slug"))
+        tournament_id = t.get("id") or t.get("slug")
+        posts = client.get_resolved_posts(tournament_id)
         summary = summarize_bot("my-bot", _my_bot_verdicts(posts))
         answered_rows.append(my_bot_answered_records(summary, label=label))
         accuracy_rows.append(my_bot_accuracy_records(summary, label=label))
+        ranking_rows.append(_my_leaderboard_record(client, tournament_id, label, me))
         question_rows.extend(_my_bot_question_rows(posts, label=label))
 
     write_csv(answered_rows, os.path.join(output_dir, "my_bot_history_answered.csv"))
     write_csv(accuracy_rows, os.path.join(output_dir, "my_bot_history_accuracy.csv"))
+    write_csv(ranking_rows, os.path.join(output_dir, "my_bot_history_ranking.csv"))
     write_csv(question_rows, os.path.join(output_dir, "my_bot_history_questions.csv"))
     write_xlsx(
-        {"answered": answered_rows, "accuracy": accuracy_rows, "questions": question_rows},
+        {
+            "answered": answered_rows,
+            "accuracy": accuracy_rows,
+            "ranking": ranking_rows,
+            "questions": question_rows,
+        },
         os.path.join(output_dir, "my_bot_history.xlsx"),
     )
 
@@ -213,15 +256,25 @@ def _write_history(client: MetaculusClient, output_dir: str, tournaments: list[d
         "",
         f"Answered **{total_answered}** questions across {len(tournaments)} MiniBench(es).",
         "",
-        "| MiniBench | Answered | Overall beat-chance | Overall Tier-2 |",
-        "|---|---|---|---|",
+        "Binary Brier is calculated on resolved binary forecasts only; lower is better (0 perfect, 1 worst).",
+        "",
+        "| MiniBench | Answered | Binary Brier | Overall beat-chance | Overall Tier-2 | Rank | Leaderboard score |",
+        "|---|---|---|---|---|---|---|",
     ]
-    for a, acc in zip(answered_rows, accuracy_rows):
+    for a, acc, ranking in zip(answered_rows, accuracy_rows, ranking_rows):
         bc = acc.get("overall_beatchance_pct")
         t2 = acc.get("overall_tier2_pct")
         bc_s = "n/a" if bc is None else f"{bc:.1f}%"
         t2_s = "n/a" if t2 is None else f"{t2:.1f}%"
-        lines.append(f"| {a.get('minibench')} | {a.get('total_answered')} | {bc_s} | {t2_s} |")
+        brier = acc.get("binary_brier_mean")
+        brier_s = "n/a" if brier is None else f"{brier:.4f}"
+        rank = ranking.get("rank")
+        rank_s = "n/a" if rank is None else str(rank)
+        leaderboard_score = ranking.get("leaderboard_score")
+        score_s = "n/a" if leaderboard_score is None else str(leaderboard_score)
+        lines.append(
+            f"| {a.get('minibench')} | {a.get('total_answered')} | {brier_s} | {bc_s} | {t2_s} | {rank_s} | {score_s} |"
+        )
     return "\n".join(lines)
 
 
@@ -266,9 +319,9 @@ def main(argv: list[str] | None = None) -> int:
         summary = run_two_sessions_ago(client, args.output_dir, offset=args.session_offset, top_n=args.top_n)
     elif explicit:
         logger.info("Analyzing explicit tournaments: %s", explicit)
-        summary = run_explicit_tournaments(client, args.output_dir, explicit)
+        summary = run_explicit_tournaments(client, args.output_dir, explicit, me=me)
     else:
-        summary = run_all_except_current(client, args.output_dir)
+        summary = run_all_except_current(client, args.output_dir, me=me)
 
     print(summary)
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")

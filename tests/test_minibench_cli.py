@@ -1,6 +1,7 @@
 """End-to-end MiniBench CLI test with a fully mocked Metaculus client (no network)."""
 
 import pandas as pd
+import pytest
 
 from metaculus_bot.minibench_analysis import cli
 from metaculus_bot.minibench_analysis.aggregate import summarize_bot
@@ -111,6 +112,9 @@ def test_two_sessions_ago_writes_files_and_summary(tmp_path, monkeypatch):
     # Numeric uniform: IQR hit (tier2 100%) but beat-chance 0%.
     assert acc["numeric_tier2_pct"] == 100.0
     assert acc["numeric_beatchance_pct"] == 0.0
+    # Binary Brier: (0.8-1)^2 and (0.7-0)^2, averaged.
+    assert acc["binary_brier_n"] == 2
+    assert acc["binary_brier_mean"] == pytest.approx(0.265)
 
     top = pd.read_csv(tmp_path / "top_bots_accuracy.csv")
     assert list(top["bot"]) == ["alpha", "beta"]
@@ -131,6 +135,7 @@ def test_two_sessions_ago_writes_files_and_summary(tmp_path, monkeypatch):
     # Q2 forecast 70% yes but resolved no -> inaccurate.
     q2 = questions[questions["question_id"] == 2].iloc[0]
     assert q2["accurate"] == "no"
+    assert q2["brier_score"] == pytest.approx(0.49)
 
 
 def test_both_report_modes_tolerate_null_latest(tmp_path, monkeypatch):
@@ -228,6 +233,31 @@ def test_explicit_tournaments_analyzes_given_ids(tmp_path, monkeypatch):
     hist = pd.read_csv(tmp_path / "my_bot_history_answered.csv")
     assert len(hist) == 2
     assert set(hist["minibench"]) == {"MB 501", "MB 502"}
+
+    ranking = pd.read_csv(tmp_path / "my_bot_history_ranking.csv")
+    assert list(ranking["minibench"]) == ["MB 501", "MB 502"]
+
+
+def test_history_records_authenticated_bot_leaderboard_rank(tmp_path):
+    fake = _FakeClient()
+    original = fake.get_leaderboard
+
+    def _leaderboard(project_id):
+        return original(project_id) + [
+            {"rank": 7, "username": "my-bot", "user_id": 99, "score": 12.5, "take": 80, "peer_score": 3.0}
+        ]
+
+    fake.get_leaderboard = _leaderboard  # type: ignore
+    fake.get_tournament = lambda t: {"id": t, "slug": f"mb-{t}", "name": f"MB {t}"}
+    cli.run_explicit_tournaments(fake, str(tmp_path), ["501"], me=fake.get_me())
+
+    ranking = pd.read_csv(tmp_path / "my_bot_history_ranking.csv").iloc[0]
+    assert ranking["bot"] == "my-bot"
+    assert ranking["rank"] == 7
+    assert ranking["leaderboard_score"] == 12.5
+
+    workbook = pd.ExcelFile(tmp_path / "my_bot_history.xlsx")
+    assert workbook.sheet_names == ["answered", "accuracy", "ranking", "questions"]
 
 
 def test_explicit_tournament_not_found_falls_back_to_bare_id(tmp_path, monkeypatch):
