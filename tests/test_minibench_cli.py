@@ -74,6 +74,27 @@ class _FakeClient:
         ]
 
 
+class _NullLatestClient(_FakeClient):
+    """Include the API shape used for resolved questions the bot did not answer."""
+
+    def get_resolved_posts(self, tournament):
+        posts = super().get_resolved_posts(tournament)
+        posts.append(
+            {
+                "id": 104,
+                "slug": "q-unanswered",
+                "title": "Question not answered?",
+                "question": {
+                    "id": 4,
+                    "type": "binary",
+                    "resolution": "yes",
+                    "my_forecasts": {"latest": None},
+                },
+            }
+        )
+        return posts
+
+
 def test_two_sessions_ago_writes_files_and_summary(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "MetaculusClient", lambda *a, **k: _FakeClient())
     rc = cli.main(["--mode", "two-sessions-ago", "--output-dir", str(tmp_path), "--session-offset", "2"])
@@ -110,6 +131,21 @@ def test_two_sessions_ago_writes_files_and_summary(tmp_path, monkeypatch):
     # Q2 forecast 70% yes but resolved no -> inaccurate.
     q2 = questions[questions["question_id"] == 2].iloc[0]
     assert q2["accurate"] == "no"
+
+
+def test_both_report_modes_tolerate_null_latest(tmp_path, monkeypatch):
+    fake = _NullLatestClient()
+    monkeypatch.setattr(cli, "MetaculusClient", lambda *a, **k: fake)
+
+    top_dir = tmp_path / "top"
+    rc = cli.main(["--mode", "two-sessions-ago", "--output-dir", str(top_dir), "--session-offset", "2"])
+    assert rc == 0
+    assert pd.read_csv(top_dir / "my_bot_answered.csv").iloc[0]["total_answered"] == 3
+
+    history_dir = tmp_path / "history"
+    rc = cli.main(["--mode", "all-except-current", "--output-dir", str(history_dir)])
+    assert rc == 0
+    assert list(pd.read_csv(history_dir / "my_bot_history_answered.csv")["total_answered"]) == [3, 3]
 
 
 def test_two_sessions_ago_targets_correct_tournament(tmp_path, monkeypatch):
