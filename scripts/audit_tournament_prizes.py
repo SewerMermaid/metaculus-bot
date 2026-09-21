@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from typing import Any
 
 import requests
@@ -14,14 +15,22 @@ BASE_URL = "https://www.metaculus.com/api"
 
 
 def _get(path: str, token: str, params: dict[str, str] | None = None) -> Any:
-    response = requests.get(
-        f"{BASE_URL}{path}",
-        headers={"Authorization": f"Token {token}"},
-        params=params,
-        timeout=30,
-    )
+    for attempt in range(4):
+        response = requests.get(
+            f"{BASE_URL}{path}",
+            headers={"Authorization": f"Token {token}"},
+            params=params,
+            timeout=30,
+        )
+        if response.status_code != 429:
+            response.raise_for_status()
+            return response.json()
+        if attempt < 3:
+            retry_after = response.headers.get("Retry-After")
+            delay = float(retry_after) if retry_after and retry_after.isdigit() else 10.0 * (attempt + 1)
+            time.sleep(min(max(delay, 1.0), 60.0))
     response.raise_for_status()
-    return response.json()
+    raise RuntimeError("Unreachable")
 
 
 def _entry_user_id(entry: dict[str, Any]) -> Any:

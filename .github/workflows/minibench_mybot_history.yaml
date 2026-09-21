@@ -72,8 +72,7 @@ jobs:
             minibench-2026-06-15 \
             minibench-2026-06-29 \
             minibench-2026-07-13 \
-            minibench-2026-07-27 \
-            minibench-2026-09-07
+            minibench-2026-07-27
       - name: Upload audit file
         if: always()
         uses: actions/upload-artifact@v4
