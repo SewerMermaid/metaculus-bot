@@ -103,10 +103,10 @@ class TestTournamentConfigFreshness:
             f"Hard stop date ({hard_stop_date.date()}) has passed.\n"
             f"\n"
             f"Please update metaculus_bot/constants.py with the new season:\n"
-            f"  - TOURNAMENT_ID (e.g., 'summer-aib-2026' or 'fall-aib-2026')\n"
+            f"  - TOURNAMENT_ID (e.g., 'fall-futureeval-2026')\n"
             f"  - TOURNAMENT_END_DATE (approximate end date)\n"
             f"\n"
-            f"Check https://www.metaculus.com/project/aib/ for current tournament info.\n"
+            f"Check https://www.metaculus.com/tournaments/ for current tournament info.\n"
             f"{'=' * 70}\n"
         )
 
