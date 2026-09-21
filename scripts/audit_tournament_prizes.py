@@ -37,8 +37,10 @@ def main() -> int:
     results: list[dict[str, Any]] = []
 
     for tournament in sys.argv[1:]:
+        project = _get(f"/projects/tournaments/{tournament}/", token)
+        project_id = project["id"]
         payload = _get(
-            f"/leaderboards/project/{tournament}/",
+            f"/leaderboards/project/{project_id}/",
             token,
             {"primary_only": "true", "with_entries": "true"},
         )
@@ -56,6 +58,7 @@ def main() -> int:
         results.append(
             {
                 "tournament": tournament,
+                "project_id": project_id,
                 "authenticated_username": me.get("username"),
                 "leaderboard_entry_count": len(entries),
                 "own_entry": mine,
