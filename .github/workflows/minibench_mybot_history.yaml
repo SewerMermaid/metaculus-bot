@@ -64,24 +64,22 @@ jobs:
           POETRY_VIRTUALENVS_CREATE: true
           POETRY_VIRTUALENVS_IN_PROJECT: true
           POETRY_INSTALLER_PARALLEL: true
-      - name: Run MiniBench my-bot history
+      - name: Audit tournament prize fields
         env:
-          METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN_TEST }}
+          METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }}
         run: |
-          # pipefail so a CLI crash fails the step instead of being masked by
-          # tee's exit code (which previously left the run green with no files).
-          set -o pipefail
-          poetry run python -m metaculus_bot.minibench_analysis.cli \
-            --mode all-except-current \
-            --output-dir minibench_reports \
-            --tournaments "${{ github.event.inputs.tournaments }}" \
-            | tee analysis_summary.md
-      - name: Upload report files
+          poetry run python scripts/audit_tournament_prizes.py \
+            minibench-2026-06-15 \
+            minibench-2026-06-29 \
+            minibench-2026-07-13 \
+            minibench-2026-07-27 \
+            minibench-2026-09-07
+      - name: Upload audit file
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: minibench-mybot-history-${{ github.run_id }}
-          path: minibench_reports/
+          name: tournament-prize-audit-${{ github.run_id }}
+          path: tournament_audit.json
           if-no-files-found: warn
           retention-days: 180
       - name: Post summary to Discord
