@@ -64,7 +64,9 @@ jobs:
           POETRY_INSTALLER_PARALLEL: true
       - name: Run bot
         run: |
-          poetry run python main.py --mode minibench
+          # Use the production MiniBench token/schedule with the Astra ensemble:
+          # Astra-high replaces Terra-high; Sol, Fable, and Opus are unchanged.
+          poetry run python main.py --mode minibench_astra
         # this reads the environment variables from the github repository.
         # Store under Settings --> Secrets and variables --> Actions
         env:

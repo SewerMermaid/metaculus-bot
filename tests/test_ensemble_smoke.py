@@ -104,6 +104,14 @@ def test_minibench_astra_workflow_is_scheduled_and_uses_dedicated_mode() -> None
     assert "GAP_FILL_ENABLED: 'false'" in workflow
 
 
+def test_production_minibench_workflow_uses_astra_ensemble() -> None:
+    workflow = Path(".github/workflows/run_bot_on_minibench.yaml").read_text(encoding="utf-8")
+
+    assert "python main.py --mode minibench_astra" in workflow
+    assert "METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }}" in workflow
+    assert "METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN_TEST }}" not in workflow
+
+
 def test_test_lineup_adds_gemini_38_flash() -> None:
     assert [llm.model for llm in llm_configs.TEST_FORECASTER_LLMS] == [
         "openrouter/openai/gpt-5.6-terra",
