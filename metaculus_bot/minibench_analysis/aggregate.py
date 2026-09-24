@@ -19,7 +19,8 @@ class QuestionVerdict:
     ``beat_chance`` is the Tier-1 verdict (all bots). ``tier2_correct`` is the
     intuitive-breakdown verdict (my bot only; None for other bots or when not
     applicable). ``brier_score`` is the proper score for resolved binary
-    forecasts (lower is better), and is None for MC/numeric questions.
+    forecasts (0..1) or MC forecasts (0..2, sum convention).
+    Numeric scores use bounded CRPS; only range-normalized values are averaged.
     ``peer_score`` is Metaculus's per-question peer score when the API exposed
     it, else None. ``scorable`` is False for annulled/ambiguous/out-of-bounds
     resolutions, which are excluded from every denominator.
@@ -33,6 +34,8 @@ class QuestionVerdict:
     tier2_correct: bool | None = None
     brier_score: float | None = None
     peer_score: float | None = None
+    bounded_crps: float | None = None
+    normalized_bounded_crps: float | None = None
 
 
 @dataclass
@@ -44,6 +47,12 @@ class TypeSummary:
     tier2_hits: int = 0
     brier_scores: list[float] = field(default_factory=list)
     peer_scores: list[float] = field(default_factory=list)
+    normalized_bounded_crps_scores: list[float] = field(default_factory=list)
+
+    @property
+    def mean_normalized_bounded_crps(self) -> float | None:
+        scores = self.normalized_bounded_crps_scores
+        return sum(scores) / len(scores) if scores else None
 
     @property
     def beat_chance_pct(self) -> float | None:
@@ -76,7 +85,7 @@ class BotSummary:
         for b in buckets:
             if v.answered:
                 b.answered += 1
-            if not v.scorable:
+            if not (v.answered and v.scorable):
                 continue
             b.scorable += 1
             if v.beat_chance:
@@ -85,8 +94,10 @@ class BotSummary:
                 b.tier2_applicable += 1
                 if v.tier2_correct:
                     b.tier2_hits += 1
-            if v.brier_score is not None:
+            if v.brier_score is not None and b is not self.overall:
                 b.brier_scores.append(v.brier_score)
+            if v.normalized_bounded_crps is not None and b is not self.overall:
+                b.normalized_bounded_crps_scores.append(v.normalized_bounded_crps)
             if v.peer_score is not None:
                 b.peer_scores.append(v.peer_score)
 

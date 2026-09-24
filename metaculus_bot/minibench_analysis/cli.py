@@ -26,6 +26,7 @@ from metaculus_bot.minibench_analysis.parse import (
     verdict_from_question,
 )
 from metaculus_bot.minibench_analysis.report import (
+    SCORING_NOTE,
     my_bot_accuracy_records,
     my_bot_answered_records,
     render_my_bot_markdown,
@@ -256,10 +257,10 @@ def _write_history(
         "",
         f"Answered **{total_answered}** questions across {len(tournaments)} MiniBench(es).",
         "",
-        "Binary Brier is calculated on resolved binary forecasts only; lower is better (0 perfect, 1 worst).",
+        SCORING_NOTE,
         "",
-        "| MiniBench | Answered | Binary Brier | Overall beat-chance | Overall Tier-2 | Rank | Leaderboard score |",
-        "|---|---|---|---|---|---|---|",
+        "| MiniBench | Answered | Binary Brier | MC Brier | Normalized bounded CRPS | Overall beat-chance | Overall Tier-2 | Rank | Leaderboard score |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for a, acc, ranking in zip(answered_rows, accuracy_rows, ranking_rows):
         bc = acc.get("overall_beatchance_pct")
@@ -268,12 +269,17 @@ def _write_history(
         t2_s = "n/a" if t2 is None else f"{t2:.1f}%"
         brier = acc.get("binary_brier_mean")
         brier_s = "n/a" if brier is None else f"{brier:.4f}"
+        mc = acc.get("mc_brier_mean")
+        mc_s = "n/a" if mc is None else f"{mc:.4f}"
+        crps = acc.get("numeric_normalized_bounded_crps_mean")
+        crps_s = "n/a" if crps is None else f"{crps:.4f}"
         rank = ranking.get("rank")
         rank_s = "n/a" if rank is None else str(rank)
         leaderboard_score = ranking.get("leaderboard_score")
         score_s = "n/a" if leaderboard_score is None else str(leaderboard_score)
         lines.append(
-            f"| {a.get('minibench')} | {a.get('total_answered')} | {brier_s} | {bc_s} | {t2_s} | {rank_s} | {score_s} |"
+            f"| {a.get('minibench')} | {a.get('total_answered')} | {brier_s} | {mc_s} | {crps_s} | "
+            f"{bc_s} | {t2_s} | {rank_s} | {score_s} |"
         )
     return "\n".join(lines)
 

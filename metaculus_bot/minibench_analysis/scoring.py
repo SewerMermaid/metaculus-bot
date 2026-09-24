@@ -22,6 +22,7 @@ as null on Metaculus and should count neither for nor against a bot.
 from __future__ import annotations
 
 import bisect
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -174,3 +175,44 @@ def within_iqr_numeric(cdf: NumericCdf, resolved_value: float) -> bool:
     p75 = cdf.value_at_percentile(0.75)
     lo, hi = (p25, p75) if p25 <= p75 else (p75, p25)
     return bool(lo <= resolved_value <= hi)
+
+
+def multiclass_brier(probs: list[float], resolved_index: int) -> float:
+    """Unnormalized multiclass Brier: sum((p_i - y_i)^2), range 0..2."""
+    if len(probs) < 2 or not 0 <= resolved_index < len(probs):
+        raise ValueError("Invalid option count or resolved index")
+    if any(not math.isfinite(p) or not 0 <= p <= 1 for p in probs):
+        raise ValueError("Probabilities must be finite and in [0, 1]")
+    if not math.isclose(sum(probs), 1.0, abs_tol=1e-6):
+        raise ValueError("Probabilities must sum to one")
+    return sum((p - float(i == resolved_index)) ** 2 for i, p in enumerate(probs))
+
+
+def bounded_crps(cdf: NumericCdf, outcome: float) -> float:
+    """Integrate squared CDF error over the stored axis, in question units.
+
+    Uses a piecewise-linear CDF, including on nonuniform/log-scaled grids.
+    Splits at the outcome and integrates each quadratic exactly. Unknown open
+    tails are excluded; this is bounded CRPS, not an assumed full-tail score.
+    Discrete/date forecasts use the same stored-grid interpolation approximation.
+    """
+    x, f = cdf.x_axis, cdf.cdf
+    if len(x) < 2 or len(x) != len(f):
+        raise ValueError("CDF requires matching arrays with at least two points")
+    if not all(math.isfinite(v) for v in [*x, *f, outcome]):
+        raise ValueError("CDF and outcome must be finite")
+    if any(b <= a for a, b in zip(x, x[1:])):
+        raise ValueError("CDF axis must strictly increase")
+    if any(not 0 <= p <= 1 for p in f) or any(b < a for a, b in zip(f, f[1:])):
+        raise ValueError("CDF probabilities must be monotone and in [0, 1]")
+    if not x[0] <= outcome <= x[-1]:
+        raise ValueError("Outcome is outside the stored range")
+    score = 0.0
+    for a, b, fa, fb in zip(x, x[1:], f, f[1:]):
+        cuts = [a, outcome, b] if a < outcome < b else [a, b]
+        for left, right in zip(cuts, cuts[1:]):
+            observed = float(left >= outcome)
+            u = fa + (fb - fa) * (left - a) / (b - a) - observed
+            v = fa + (fb - fa) * (right - a) / (b - a) - observed
+            score += (right - left) * (u * u + u * v + v * v) / 3
+    return score
