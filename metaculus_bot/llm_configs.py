@@ -62,12 +62,12 @@ ACCEPTABLE_QUANTS = [
 
 FORECASTER_LLMS: list[GeneralLlm] = [
     build_llm_with_openrouter_fallback(
-        model="openrouter/openai/gpt-5.6-terra",
+        model="openrouter/openai/gpt-6-astra",
         reasoning={"effort": "high"},
         **EFFORT_MODEL_CONFIG,
     ),
     build_llm_with_openrouter_fallback(
-        model="openrouter/openai/gpt-5.6-sol",
+        model="openrouter/openai/gpt-6-sol",
         reasoning={"effort": "high"},
         **EFFORT_MODEL_CONFIG,
     ),
@@ -85,17 +85,9 @@ FORECASTER_LLMS: list[GeneralLlm] = [
     ),
 ]
 
-# Manual MiniBench A/B variant. It deliberately shares the other three model
-# objects with the production lineup so the only experimental variable is the
-# first OpenAI slot: GPT-6 Astra replaces GPT-5.6 Terra at the same effort.
-MINIBENCH_ASTRA_FORECASTER_LLMS: list[GeneralLlm] = [
-    build_llm_with_openrouter_fallback(
-        model="openrouter/openai/gpt-6-astra",
-        reasoning={"effort": "high"},
-        **EFFORT_MODEL_CONFIG,
-    ),
-    *FORECASTER_LLMS[1:],
-]
+# Keep the existing MiniBench mode compatible while sharing the same production
+# ensemble as FutureEval: GPT-6 Astra and GPT-6 Sol, both at high effort.
+MINIBENCH_ASTRA_FORECASTER_LLMS: list[GeneralLlm] = [*FORECASTER_LLMS]
 
 # Test-only extension of the production ensemble. Gemini stays available for
 # the fixed-question Test Bot and the custom, non-publishing smoke test, but is

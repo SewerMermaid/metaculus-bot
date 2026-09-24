@@ -62,8 +62,8 @@ def test_competition_workflows_disable_all_gemini_routes() -> None:
 
 def test_production_lineup_excludes_gemini() -> None:
     assert [llm.model for llm in llm_configs.FORECASTER_LLMS] == [
-        "openrouter/openai/gpt-5.6-terra",
-        "openrouter/openai/gpt-5.6-sol",
+        "openrouter/openai/gpt-6-astra",
+        "openrouter/openai/gpt-6-sol",
         "openrouter/anthropic/claude-fable-5.1",
         "openrouter/anthropic/claude-opus-5",
     ]
@@ -75,10 +75,10 @@ def test_production_lineup_excludes_gemini() -> None:
     ]
 
 
-def test_minibench_astra_variant_only_replaces_terra() -> None:
+def test_minibench_astra_uses_production_lineup() -> None:
     assert [llm.model for llm in llm_configs.MINIBENCH_ASTRA_FORECASTER_LLMS] == [
         "openrouter/openai/gpt-6-astra",
-        "openrouter/openai/gpt-5.6-sol",
+        "openrouter/openai/gpt-6-sol",
         "openrouter/anthropic/claude-fable-5.1",
         "openrouter/anthropic/claude-opus-5",
     ]
@@ -114,8 +114,8 @@ def test_production_minibench_workflow_uses_astra_ensemble() -> None:
 
 def test_test_lineup_adds_gemini_38_flash() -> None:
     assert [llm.model for llm in llm_configs.TEST_FORECASTER_LLMS] == [
-        "openrouter/openai/gpt-5.6-terra",
-        "openrouter/openai/gpt-5.6-sol",
+        "openrouter/openai/gpt-6-astra",
+        "openrouter/openai/gpt-6-sol",
         "openrouter/anthropic/claude-fable-5.1",
         "openrouter/anthropic/claude-opus-5",
         "openrouter/google/gemini-3.8-flash",
