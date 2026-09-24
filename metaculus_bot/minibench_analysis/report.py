@@ -119,6 +119,9 @@ def write_xlsx(sheets: dict[str, list[dict[str, Any]]], path: str) -> bool:
         for sheet_name, records in sheets.items():
             pd.DataFrame(records).to_excel(writer, sheet_name=sheet_name[:31], index=False)
         pd.DataFrame([{"scoring_methodology": SCORING_NOTE}]).to_excel(writer, sheet_name="scoring_notes", index=False)
+        from metaculus_bot.minibench_analysis.xlsx_layout import format_report  # noqa: PLC0415
+
+        format_report(writer.book)
     logger.info("Wrote %s (%d sheet(s))", path, len(sheets))
     return True
 
