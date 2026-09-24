@@ -257,7 +257,7 @@ def test_history_records_authenticated_bot_leaderboard_rank(tmp_path):
     assert ranking["leaderboard_score"] == 12.5
 
     workbook = pd.ExcelFile(tmp_path / "my_bot_history.xlsx")
-    assert workbook.sheet_names == ["answered", "accuracy", "ranking", "questions"]
+    assert workbook.sheet_names == ["answered", "accuracy", "ranking", "questions", "scoring_notes"]
 
 
 def test_explicit_tournament_not_found_falls_back_to_bare_id(tmp_path, monkeypatch):

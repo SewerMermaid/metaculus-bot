@@ -17,6 +17,14 @@ from metaculus_bot.minibench_analysis.aggregate import QUESTION_TYPES, BotSummar
 logger = logging.getLogger(__name__)
 
 _TYPE_LABEL = {"binary": "binary", "multiple_choice": "mc", "numeric": "numeric"}
+SCORING_NOTE = (
+    "Lower is better. Binary Brier: (p-y)^2, range 0..1. MC Brier: sum((p_i-y_i)^2), range 0..2. "
+    "Numeric bounded CRPS integrates squared CDF error over the stored question range using linear interpolation "
+    "(an approximation for discrete/date forecasts); unknown tails are excluded. Raw per-question values use question "
+    "units; summary means divide each score by its question range. No mixed-type score is calculated. "
+    "Only answered, resolved, valid forecasts contribute; missing scores are blank, not zero. "
+    "These diagnostic scores are separate from the official Metaculus leaderboard."
+)
 
 
 def _type_cells(prefix: str, ts: TypeSummary, *, include_tier2: bool, include_brier: bool = False) -> dict[str, Any]:
@@ -31,6 +39,9 @@ def _type_cells(prefix: str, ts: TypeSummary, *, include_tier2: bool, include_br
     if include_brier:
         cells[f"{prefix}_brier_n"] = len(ts.brier_scores)
         cells[f"{prefix}_brier_mean"] = ts.mean_brier_score
+    if prefix == "numeric":
+        cells["numeric_normalized_bounded_crps_n"] = len(ts.normalized_bounded_crps_scores)
+        cells["numeric_normalized_bounded_crps_mean"] = ts.mean_normalized_bounded_crps
     return cells
 
 
@@ -56,7 +67,7 @@ def top10_records(summaries: list[BotSummary], aggregates: dict[str, dict[str, A
             "overall_beatchance_pct": s.overall.beat_chance_pct,
         }
         for t in QUESTION_TYPES:
-            row.update(_type_cells(_TYPE_LABEL[t], s.by_type[t], include_tier2=False))
+            row.update(_type_cells(_TYPE_LABEL[t], s.by_type[t], include_tier2=False, include_brier=t != "numeric"))
         rows.append(row)
     return rows
 
@@ -83,7 +94,7 @@ def my_bot_accuracy_records(summary: BotSummary, *, label: str | None = None) ->
                 _TYPE_LABEL[t],
                 summary.by_type[t],
                 include_tier2=True,
-                include_brier=t == "binary",
+                include_brier=t != "numeric",
             )
         )
         row[f"{_TYPE_LABEL[t]}_peer_avg"] = summary.by_type[t].avg_peer_score
@@ -107,6 +118,7 @@ def write_xlsx(sheets: dict[str, list[dict[str, Any]]], path: str) -> bool:
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         for sheet_name, records in sheets.items():
             pd.DataFrame(records).to_excel(writer, sheet_name=sheet_name[:31], index=False)
+        pd.DataFrame([{"scoring_methodology": SCORING_NOTE}]).to_excel(writer, sheet_name="scoring_notes", index=False)
     logger.info("Wrote %s (%d sheet(s))", path, len(sheets))
     return True
 
@@ -148,10 +160,10 @@ def render_my_bot_markdown(answered: dict[str, Any], accuracy: dict[str, Any], l
         f"(binary {answered.get('binary_answered', 0)}, mc {answered.get('mc_answered', 0)}, "
         f"numeric {answered.get('numeric_answered', 0)}).",
         "",
-        "Binary Brier is a proper accuracy score: lower is better, 0 is perfect, and 1 is worst.",
+        SCORING_NOTE,
         "",
-        "| Type | Beat-chance | Tier-2 (directional/argmax/IQR) | Mean Brier | Avg peer |",
-        "|---|---|---|---|---|",
+        "| Type | Beat-chance | Tier-2 (directional/argmax/IQR) | Mean Brier | Mean normalized bounded CRPS | Avg peer |",
+        "|---|---|---|---|---|---|",
     ]
     for t in ("binary", "mc", "numeric", "overall"):
         bc = f"{accuracy.get(f'{t}_beatchance_n')}/{accuracy.get(f'{t}_scored')} ({_fmt_pct(accuracy.get(f'{t}_beatchance_pct'))})"
@@ -160,7 +172,9 @@ def render_my_bot_markdown(answered: dict[str, Any], accuracy: dict[str, Any], l
         )
         peer = accuracy.get(f"{t}_peer_avg")
         peer_s = "n/a" if peer is None else f"{peer:.1f}"
-        brier = accuracy.get("binary_brier_mean") if t == "binary" else None
+        brier = accuracy.get(f"{t}_brier_mean") if t in ("binary", "mc") else None
         brier_s = "n/a" if brier is None else f"{brier:.4f}"
-        lines.append(f"| {t} | {bc} | {t2} | {brier_s} | {peer_s} |")
+        crps = accuracy.get("numeric_normalized_bounded_crps_mean") if t == "numeric" else None
+        crps_s = "n/a" if crps is None else f"{crps:.4f}"
+        lines.append(f"| {t} | {bc} | {t2} | {brier_s} | {crps_s} | {peer_s} |")
     return "\n".join(lines)
