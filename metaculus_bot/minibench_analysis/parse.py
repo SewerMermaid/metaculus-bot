@@ -162,6 +162,7 @@ def verdict_from_question(
             p_yes = float(values[-1])  # [p_no, p_yes] or [p_yes]; last element is P(yes)
             verdict.beat_chance = beat_chance_binary(p_yes, resolved)
             verdict.brier_score = brier_score(p_yes, resolved)
+            verdict.brier_uniform_baseline = 0.25
             if is_my_bot:
                 verdict.tier2_correct = directional_binary(p_yes, resolved)
         elif bucket == "multiple_choice":
@@ -169,6 +170,7 @@ def verdict_from_question(
             if len(probs) != len(qjson.get("options") or []):
                 raise ValueError("Forecast length does not match options")
             verdict.brier_score = multiclass_brier(probs, resolved)
+            verdict.brier_uniform_baseline = 1 - 1 / len(probs)
             verdict.beat_chance = beat_chance_multiple_choice(probs, resolved)
             if is_my_bot:
                 verdict.tier2_correct = argmax_multiple_choice(probs, resolved)
@@ -264,6 +266,12 @@ def my_bot_question_detail(
             "tier2_correct": verdict.tier2_correct,
             # Binary Brier is 0..1; MC uses the 0..2 sum convention.
             "brier_score": verdict.brier_score,
+            "brier_skill": (
+                1 - verdict.brier_score / verdict.brier_uniform_baseline
+                if verdict.brier_score is not None and verdict.brier_uniform_baseline
+                else None
+            ),
+            "brier_uniform_baseline": verdict.brier_uniform_baseline,
             "bounded_crps": verdict.bounded_crps,
             "normalized_bounded_crps": verdict.normalized_bounded_crps,
             "peer_score": verdict.peer_score,

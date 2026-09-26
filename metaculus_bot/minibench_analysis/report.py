@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 _TYPE_LABEL = {"binary": "binary", "multiple_choice": "mc", "numeric": "numeric"}
 SCORING_NOTE = (
-    "Lower is better. Binary Brier: (p-y)^2, range 0..1. MC Brier: sum((p_i-y_i)^2), range 0..2. "
+    "Lower Brier/CRPS is better. Binary Brier: (p-y)^2, range 0..1. MC Brier: sum((p_i-y_i)^2), range 0..2. "
+    "Brier skill (higher is better): 1 - sum(bot Brier)/sum(uniform Brier) on the same scored questions. "
+    "Uniform baseline: binary 0.25, MC 1-1/K for K options. 100% perfect, 0% uniform, negative worse. "
     "Numeric bounded CRPS integrates squared CDF error over the stored question range using linear interpolation "
     "(an approximation for discrete/date forecasts); unknown tails are excluded. Raw per-question values use question "
     "units; summary means divide each score by its question range. No mixed-type score is calculated. "
@@ -39,6 +41,7 @@ def _type_cells(prefix: str, ts: TypeSummary, *, include_tier2: bool, include_br
     if include_brier:
         cells[f"{prefix}_brier_n"] = len(ts.brier_scores)
         cells[f"{prefix}_brier_mean"] = ts.mean_brier_score
+        cells[f"{prefix}_brier_skill"] = ts.brier_skill
     if prefix == "numeric":
         cells["numeric_normalized_bounded_crps_n"] = len(ts.normalized_bounded_crps_scores)
         cells["numeric_normalized_bounded_crps_mean"] = ts.mean_normalized_bounded_crps
@@ -165,8 +168,8 @@ def render_my_bot_markdown(answered: dict[str, Any], accuracy: dict[str, Any], l
         "",
         SCORING_NOTE,
         "",
-        "| Type | Beat-chance | Tier-2 (directional/argmax/IQR) | Mean Brier | Mean normalized bounded CRPS | Avg peer |",
-        "|---|---|---|---|---|---|",
+        "| Type | Beat-chance | Tier-2 (directional/argmax/IQR) | Mean Brier | Brier skill vs uniform | Mean normalized bounded CRPS | Avg peer |",
+        "|---|---|---|---|---|---|---|",
     ]
     for t in ("binary", "mc", "numeric", "overall"):
         bc = f"{accuracy.get(f'{t}_beatchance_n')}/{accuracy.get(f'{t}_scored')} ({_fmt_pct(accuracy.get(f'{t}_beatchance_pct'))})"
@@ -177,7 +180,9 @@ def render_my_bot_markdown(answered: dict[str, Any], accuracy: dict[str, Any], l
         peer_s = "n/a" if peer is None else f"{peer:.1f}"
         brier = accuracy.get(f"{t}_brier_mean") if t in ("binary", "mc") else None
         brier_s = "n/a" if brier is None else f"{brier:.4f}"
+        skill = accuracy.get(f"{t}_brier_skill")
+        skill_s = "n/a" if skill is None else f"{skill:.1%}"
         crps = accuracy.get("numeric_normalized_bounded_crps_mean") if t == "numeric" else None
         crps_s = "n/a" if crps is None else f"{crps:.4f}"
-        lines.append(f"| {t} | {bc} | {t2} | {brier_s} | {crps_s} | {peer_s} |")
+        lines.append(f"| {t} | {bc} | {t2} | {brier_s} | {skill_s} | {crps_s} | {peer_s} |")
     return "\n".join(lines)

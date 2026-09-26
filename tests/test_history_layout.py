@@ -8,8 +8,8 @@ def test_summary_links_match_competition_not_row_position(tmp_path):
     data = {
         "answered": [{"minibench": "A", "total_answered": 2}, {"minibench": "B", "total_answered": 0}],
         "accuracy": [
-            {"minibench": "B", "binary_brier_n": 0, "binary_brier_mean": None},
-            {"minibench": "A", "binary_brier_n": 2, "binary_brier_mean": 0.0},
+            {"minibench": "B", "binary_brier_n": 0, "binary_brier_mean": None, "binary_brier_skill": None},
+            {"minibench": "A", "binary_brier_n": 2, "binary_brier_mean": 0.0, "binary_brier_skill": 1.0},
         ],
         "ranking": [{"minibench": "A", "rank": 7}],
         "questions": [{"question_url": "https://www.metaculus.com/questions/1/", "brier_score": 0.0}],
@@ -20,7 +20,11 @@ def test_summary_links_match_competition_not_row_position(tmp_path):
     s = wb["Summary"]
     assert s["D10"].value == "=IF(ISBLANK('accuracy'!C3),\"\",'accuracy'!C3)"
     assert s["D11"].value == "=IF(ISBLANK('accuracy'!C2),\"\",'accuracy'!C2)"
-    assert s["I11"].value is None
+    assert s["K11"].value is None
+    assert s["E10"].value == "=IF(ISBLANK('accuracy'!D3),\"\",'accuracy'!D3)"
+    assert s["E10"].number_format == "0.0%"
+    assert s["E9"].value == "Binary skill vs uniform"
+    assert s["H9"].value == "MC skill vs uniform"
     assert s["G7"].value == '=IF(E7=0,"",SUMPRODUCT(C10:C11,D10:D11)/E7)'
     assert wb["accuracy"]["C3"].value == 0
     assert wb["accuracy"]["C2"].value is None
