@@ -36,6 +36,7 @@ class QuestionVerdict:
     peer_score: float | None = None
     bounded_crps: float | None = None
     normalized_bounded_crps: float | None = None
+    brier_uniform_baseline: float | None = None
 
 
 @dataclass
@@ -46,6 +47,7 @@ class TypeSummary:
     tier2_applicable: int = 0
     tier2_hits: int = 0
     brier_scores: list[float] = field(default_factory=list)
+    brier_baselines: list[float] = field(default_factory=list)
     peer_scores: list[float] = field(default_factory=list)
     normalized_bounded_crps_scores: list[float] = field(default_factory=list)
 
@@ -69,6 +71,14 @@ class TypeSummary:
     @property
     def mean_brier_score(self) -> float | None:
         return sum(self.brier_scores) / len(self.brier_scores) if self.brier_scores else None
+
+    @property
+    def brier_skill(self) -> float | None:
+        # Require a baseline for every scored forecast: never compare different samples.
+        if not self.brier_scores or len(self.brier_baselines) != len(self.brier_scores):
+            return None
+        baseline = sum(self.brier_baselines)
+        return 1 - sum(self.brier_scores) / baseline if baseline > 0 else None
 
 
 @dataclass
@@ -96,6 +106,8 @@ class BotSummary:
                     b.tier2_hits += 1
             if v.brier_score is not None and b is not self.overall:
                 b.brier_scores.append(v.brier_score)
+                if v.brier_uniform_baseline is not None:
+                    b.brier_baselines.append(v.brier_uniform_baseline)
             if v.normalized_bounded_crps is not None and b is not self.overall:
                 b.normalized_bounded_crps_scores.append(v.normalized_bounded_crps)
             if v.peer_score is not None:

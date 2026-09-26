@@ -48,7 +48,9 @@ def format_report(workbook):
             ws.column_dimensions[get_column_letter(col)].width = width
             for row in range(2, ws.max_row + 1):
                 cell = ws.cell(row, col)
-                if name.endswith("_pct"):
+                if name.endswith("brier_skill"):
+                    cell.number_format = "0.0%"
+                elif name.endswith("_pct"):
                     cell.number_format = '0.0"%"'  # Source values already use 0..100.
                 elif "brier" in name or "crps" in name:
                     cell.number_format = "0" if name.endswith("_n") else "0.0000"
@@ -88,14 +90,14 @@ def format_report(workbook):
     summary = workbook.create_sheet("Summary", 0)
     summary.sheet_view.showGridLines = False
     summary.sheet_properties.tabColor = NAVY
-    widths = [44, 12, 12, 14, 12, 14, 12, 18, 10, 12, 18]
+    widths = [44, 12, 12, 14, 16, 12, 14, 16, 12, 18, 10, 12, 18]
     for col, width in enumerate(widths, 1):
         summary.column_dimensions[get_column_letter(col)].width = width
     summary["A2"] = "Metaculus bot history"
     summary["A2"].font = Font(name="Arial", size=16, bold=True, color=NAVY)
-    summary["A3"] = "Competition results from the latest report snapshot. Lower forecast-error scores are better."
+    summary["A3"] = "Latest report snapshot. Lower Brier/CRPS is better; higher Brier skill is better."
     summary["A3"].font = Font(name="Arial", size=10, italic=True, color="526579")
-    for row in summary.iter_rows(min_row=4, max_row=4, max_col=11):
+    for row in summary.iter_rows(min_row=4, max_row=4, max_col=13):
         for cell in row:
             cell.border = Border(bottom=Side(style="medium", color=NAVY))
     summary.row_dimensions[4].height = 4
@@ -132,8 +134,10 @@ def format_report(workbook):
             "Answered",
             "Binary scored",
             "Binary Brier",
+            "Binary skill vs uniform",
             "MC scored",
             "MC Brier",
+            "MC skill vs uniform",
             "Numeric scored",
             "Normalized bounded CRPS",
             "Rank",
@@ -145,8 +149,10 @@ def format_report(workbook):
         ("answered", "total_answered"),
         ("accuracy", "binary_brier_n"),
         ("accuracy", "binary_brier_mean"),
+        ("accuracy", "binary_brier_skill"),
         ("accuracy", "mc_brier_n"),
         ("accuracy", "mc_brier_mean"),
+        ("accuracy", "mc_brier_skill"),
         ("accuracy", "numeric_normalized_bounded_crps_n"),
         ("accuracy", "numeric_normalized_bounded_crps_mean"),
         ("ranking", "rank"),
@@ -165,10 +171,18 @@ def format_report(workbook):
             )
             if out_row % 2 == 0:
                 cell.fill = PatternFill("solid", fgColor="F5F8FC")
-            cell.number_format = "0.0000" if cell.column in (4, 6, 8) else "#,##0.000" if cell.column == 11 else "0"
+            cell.number_format = (
+                "0.0%"
+                if cell.column in (5, 8)
+                else "0.0000"
+                if cell.column in (4, 7, 10)
+                else "#,##0.000"
+                if cell.column == 13
+                else "0"
+            )
         summary.row_dimensions[out_row].height = 32
     if labels:
-        summary.auto_filter.ref = f"A9:K{end}"
+        summary.auto_filter.ref = f"A9:M{end}"
     summary.freeze_panes = "B10"
 
     note_row = end + 3
@@ -176,6 +190,11 @@ def format_report(workbook):
     notes = [
         ("Binary Brier", "Range 0–1. Mean squared error against the resolved yes/no outcome."),
         ("Multiple-choice Brier", "Range 0–2. Sum of squared errors across all options; not the binary normalization."),
+        (
+            "Brier skill vs uniform",
+            "1 − total Brier / total uniform Brier on the same scored questions. Baseline: binary 0.25; MC 1−1/K. "
+            "100% perfect; 0% uniform; negative worse. Higher is better.",
+        ),
         (
             "Numeric CRPS",
             "Bounded CDF error divided by the question range. Unknown tails excluded; discrete/date values use interpolation.",
@@ -199,7 +218,7 @@ def format_report(workbook):
     ]
     for r, (label, text) in enumerate(notes, note_row + 1):
         summary.cell(r, 1, label).font = Font(name="Arial", size=10, bold=True, color=NAVY)
-        summary.merge_cells(start_row=r, start_column=2, end_row=r, end_column=11)
+        summary.merge_cells(start_row=r, start_column=2, end_row=r, end_column=13)
         summary.cell(r, 2, text).font = Font(name="Arial", size=10, color=INK)
         summary.cell(r, 2).alignment = Alignment(vertical="center", wrap_text=True)
         summary.row_dimensions[r].height = 28
@@ -211,12 +230,12 @@ def format_report(workbook):
     run_id = os.environ.get("GITHUB_RUN_ID")
     summary.cell(r + 1, 1, "Source run" if run_id else "Source")
     summary.cell(r + 1, 2, f"https://github.com/{repository}/actions/runs/{run_id}" if run_id else "Saved report data")
-    summary.merge_cells(start_row=r + 1, start_column=2, end_row=r + 1, end_column=11)
+    summary.merge_cells(start_row=r + 1, start_column=2, end_row=r + 1, end_column=13)
     summary.print_options.horizontalCentered = True
     summary.sheet_properties.pageSetUpPr.fitToPage = True
     summary.page_setup.orientation = "landscape"
     summary.page_setup.paperSize = summary.PAPERSIZE_A3
     summary.page_setup.fitToWidth = 1
     summary.page_setup.fitToHeight = 0
-    summary.print_area = f"A1:K{r + 1}"
+    summary.print_area = f"A1:M{r + 1}"
     workbook.active = 0

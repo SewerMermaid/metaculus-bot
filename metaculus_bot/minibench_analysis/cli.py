@@ -259,8 +259,8 @@ def _write_history(
         "",
         SCORING_NOTE,
         "",
-        "| MiniBench | Answered | Binary Brier | MC Brier | Normalized bounded CRPS | Overall beat-chance | Overall Tier-2 | Rank | Leaderboard score |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| MiniBench | Answered | Binary Brier | Binary skill vs uniform | MC Brier | MC skill vs uniform | Normalized bounded CRPS | Overall beat-chance | Overall Tier-2 | Rank | Leaderboard score |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for a, acc, ranking in zip(answered_rows, accuracy_rows, ranking_rows):
         bc = acc.get("overall_beatchance_pct")
@@ -271,6 +271,9 @@ def _write_history(
         brier_s = "n/a" if brier is None else f"{brier:.4f}"
         mc = acc.get("mc_brier_mean")
         mc_s = "n/a" if mc is None else f"{mc:.4f}"
+        binary_skill, mc_skill = acc.get("binary_brier_skill"), acc.get("mc_brier_skill")
+        binary_skill_s = "n/a" if binary_skill is None else f"{binary_skill:.1%}"
+        mc_skill_s = "n/a" if mc_skill is None else f"{mc_skill:.1%}"
         crps = acc.get("numeric_normalized_bounded_crps_mean")
         crps_s = "n/a" if crps is None else f"{crps:.4f}"
         rank = ranking.get("rank")
@@ -278,7 +281,8 @@ def _write_history(
         leaderboard_score = ranking.get("leaderboard_score")
         score_s = "n/a" if leaderboard_score is None else str(leaderboard_score)
         lines.append(
-            f"| {a.get('minibench')} | {a.get('total_answered')} | {brier_s} | {mc_s} | {crps_s} | "
+            f"| {a.get('minibench')} | {a.get('total_answered')} | {brier_s} | {binary_skill_s} | "
+            f"{mc_s} | {mc_skill_s} | {crps_s} | "
             f"{bc_s} | {t2_s} | {rank_s} | {score_s} |"
         )
     return "\n".join(lines)
