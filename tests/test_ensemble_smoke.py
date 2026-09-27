@@ -65,14 +65,20 @@ def test_production_lineup_excludes_gemini() -> None:
         "openrouter/openai/gpt-6-astra",
         "openrouter/openai/gpt-6-sol",
         "openrouter/anthropic/claude-fable-5.1",
-        "openrouter/anthropic/claude-opus-5",
+        "openrouter/anthropic/claude-opus-5.5",
     ]
     assert [llm.litellm_kwargs["reasoning"] for llm in llm_configs.FORECASTER_LLMS] == [
-        {"effort": "high"},
-        {"effort": "high"},
-        {"effort": "high"},
-        {"effort": "high"},
+        {"effort": "xhigh"},
+        {"effort": "xhigh"},
+        {"effort": "xhigh"},
+        {"effort": "xhigh"},
     ]
+
+
+def test_production_effort_has_no_verbosity_override() -> None:
+    for llm in llm_configs.FORECASTER_LLMS:
+        assert "verbosity" not in llm.litellm_kwargs
+        assert "verbosity" not in llm.litellm_kwargs.get("extra_body", {})
 
 
 def test_minibench_astra_uses_production_lineup() -> None:
@@ -80,13 +86,13 @@ def test_minibench_astra_uses_production_lineup() -> None:
         "openrouter/openai/gpt-6-astra",
         "openrouter/openai/gpt-6-sol",
         "openrouter/anthropic/claude-fable-5.1",
-        "openrouter/anthropic/claude-opus-5",
+        "openrouter/anthropic/claude-opus-5.5",
     ]
     assert [llm.litellm_kwargs["reasoning"] for llm in llm_configs.MINIBENCH_ASTRA_FORECASTER_LLMS] == [
-        {"effort": "high"},
-        {"effort": "high"},
-        {"effort": "high"},
-        {"effort": "high"},
+        {"effort": "xhigh"},
+        {"effort": "xhigh"},
+        {"effort": "xhigh"},
+        {"effort": "xhigh"},
     ]
 
 
@@ -117,14 +123,14 @@ def test_test_lineup_adds_gemini_38_flash() -> None:
         "openrouter/openai/gpt-6-astra",
         "openrouter/openai/gpt-6-sol",
         "openrouter/anthropic/claude-fable-5.1",
-        "openrouter/anthropic/claude-opus-5",
+        "openrouter/anthropic/claude-opus-5.5",
         "openrouter/google/gemini-3.8-flash",
     ]
     assert [llm.litellm_kwargs["reasoning"] for llm in llm_configs.TEST_FORECASTER_LLMS] == [
-        {"effort": "high"},
-        {"effort": "high"},
-        {"effort": "high"},
-        {"effort": "high"},
+        {"effort": "xhigh"},
+        {"effort": "xhigh"},
+        {"effort": "xhigh"},
+        {"effort": "xhigh"},
         {"effort": "high"},
     ]
 

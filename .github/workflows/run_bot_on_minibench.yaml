@@ -65,7 +65,7 @@ jobs:
       - name: Run bot
         run: |
           # Use the production MiniBench token/schedule with the Astra ensemble:
-          # Astra-high replaces Terra-high; Sol, Fable, and Opus are unchanged.
+          # Shares the FutureEval ensemble configured in llm_configs.py.
           poetry run python main.py --mode minibench_astra
         # this reads the environment variables from the github repository.
         # Store under Settings --> Secrets and variables --> Actions
