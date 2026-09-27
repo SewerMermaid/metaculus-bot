@@ -32,7 +32,7 @@ REASONING_MODEL_CONFIG = {
 }
 # Current effort-controlled OpenAI/Anthropic models reject legacy sampling
 # parameters such as temperature/top_p. Keep the shared timeout/retry/output
-# limits while letting the provider's high-reasoning preset control sampling.
+# limits while letting the provider's reasoning preset control sampling.
 EFFORT_MODEL_CONFIG = {
     key: value for key, value in REASONING_MODEL_CONFIG.items() if key not in {"temperature", "top_p"}
 }
@@ -63,30 +63,28 @@ ACCEPTABLE_QUANTS = [
 FORECASTER_LLMS: list[GeneralLlm] = [
     build_llm_with_openrouter_fallback(
         model="openrouter/openai/gpt-6-astra",
-        reasoning={"effort": "high"},
+        reasoning={"effort": "xhigh"},
         **EFFORT_MODEL_CONFIG,
     ),
     build_llm_with_openrouter_fallback(
         model="openrouter/openai/gpt-6-sol",
-        reasoning={"effort": "high"},
+        reasoning={"effort": "xhigh"},
         **EFFORT_MODEL_CONFIG,
     ),
     build_llm_with_openrouter_fallback(
         model="openrouter/anthropic/claude-fable-5.1",
-        reasoning={"effort": "high"},
-        extra_body={"verbosity": "high"},
+        reasoning={"effort": "xhigh"},
         **EFFORT_MODEL_CONFIG,
     ),
     build_llm_with_openrouter_fallback(
-        model="openrouter/anthropic/claude-opus-5",
-        reasoning={"effort": "high"},
-        extra_body={"verbosity": "high"},
+        model="openrouter/anthropic/claude-opus-5.5",
+        reasoning={"effort": "xhigh"},
         **EFFORT_MODEL_CONFIG,
     ),
 ]
 
 # Keep the existing MiniBench mode compatible while sharing the same production
-# ensemble as FutureEval: GPT-6 Astra and GPT-6 Sol, both at high effort.
+# ensemble as FutureEval, with all four forecasters at extra-high effort.
 MINIBENCH_ASTRA_FORECASTER_LLMS: list[GeneralLlm] = [*FORECASTER_LLMS]
 
 # Test-only extension of the production ensemble. Gemini stays available for
